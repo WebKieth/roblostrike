@@ -53,9 +53,11 @@ end
         test_player_spawn.PlayerSpawnTests.setUpClass()
         boxes = test_player_spawn.PlayerSpawnTests.boxes
         for z in (-10, -65):
-            for x in (-25, -18, -10, 3):
-                self.assertFalse([b[0] for b in boxes if intersects((x, .6, z), (.6, .55, .6), b)])
-                floors = [v[1] for b in boxes if (v := vertical_interval(x, z, b)) and v[1] < .6]
+            positions = [(x, z) for x in (-25, -18, -10, 3)]
+            positions += [(x, z + (4 if z == -10 else -4)) for x in (-25, -18)]
+            for x, loot_z in positions:
+                self.assertFalse([b[0] for b in boxes if intersects((x, .6, loot_z), (.6, .55, .6), b)])
+                floors = [v[1] for b in boxes if (v := vertical_interval(x, loot_z, b)) and v[1] < .6]
                 self.assertAlmostEqual(max(floors), 0, delta=.1)
         self.assertFalse([b[0] for b in boxes if intersects((-12, 2.6, 1), (1.05, 2.48, 1.05), b)])
 

@@ -59,6 +59,17 @@ function Loadout.find(player: Player, slot: number): Tool?
 	return nil
 end
 
+-- Concrete weapon IDs remain stable; several models occupy hotbar slot 1.
+function Loadout.findHotbar(player: Player, hotbarSlot: number): Tool?
+	for slot, definition in Weapons do
+		if (definition.HotbarSlot or slot) == hotbarSlot then
+			local tool = Loadout.find(player, slot)
+			if tool then return tool end
+		end
+	end
+	return nil
+end
+
 function Loadout.give(player: Player, preserveExisting: boolean?): boolean
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	if not backpack then
@@ -75,7 +86,9 @@ function Loadout.give(player: Player, preserveExisting: boolean?): boolean
 		end
 	end
 	for slot, definition in Weapons do
+		if definition.PickupOnly then continue end
 		if player.Character and player.Character:GetAttribute("DroppedSlot" .. slot) then continue end
+		if definition.HotbarSlot and Loadout.findHotbar(player, definition.HotbarSlot) then continue end
 		local existing = false
 		for _, container in { player.Character, backpack } do
 			if container then
@@ -106,6 +119,10 @@ function Loadout.equip(player: Player, slot: number)
 	-- Both grenade definitions share hotbar key 4; WeaponSlot identifies the
 	-- concrete Tool internally. Repeated key 4 cycles without adding a fifth key.
 	local targetSlot = slot
+	if slot == 1 then
+		local primary = Loadout.findHotbar(player, 1)
+		if primary then targetSlot = primary:GetAttribute("WeaponSlot") end
+	end
 	if slot == 4 then
 		local current = character:FindFirstChildOfClass("Tool")
 		local currentSlot = if current then current:GetAttribute("WeaponSlot") else nil

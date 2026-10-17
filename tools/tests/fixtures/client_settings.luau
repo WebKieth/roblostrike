@@ -41,7 +41,7 @@ end}
 local workspace=Instance.new("Workspace")
 local soundService=Instance.new("SoundService")
 local actions,renders={},{}
-local input={InputChanged=signal(),InputEnded=signal(),GetFocusedTextBox=function() return nil end}
+local input={InputBegan=signal(),InputChanged=signal(),InputEnded=signal(),WindowFocusReleased=signal(),GetFocusedTextBox=function() return nil end}
 local guiService={MenuOpened=signal(),MenuClosed=signal()}
 local services={SoundService=soundService,UserInputService=input,GuiService=guiService,
 	ContextActionService={BindActionAtPriority=function(_,name,callback) actions[name]=callback end},
@@ -53,7 +53,7 @@ local UDim={new=function(...) return {...} end}
 local Vector2={new=function(...) return {...} end}
 local Enum={Font={GothamMedium=1},TextXAlignment={Left=1},UserInputState={Begin=1},
 	UserInputType={MouseButton1=1,MouseMovement=2,Touch=3},ContextActionPriority={High={Value=100}},
-	ContextActionResult={Sink=1,Pass=2},KeyCode={F10=1},MouseBehavior={Default=1},RenderPriority={Camera={Value=200}},
+	ContextActionResult={Sink=1,Pass=2},KeyCode={F10=1,LeftAlt=2,RightAlt=3},MouseBehavior={Default=1},RenderPriority={Camera={Value=200}},
 	PlayerActions={CharacterForward=1,CharacterBackward=2,CharacterLeft=3,CharacterRight=4,CharacterJump=5}}
 local audio=(function()
 -- AUDIO_MODULE_HERE
@@ -137,6 +137,30 @@ guiService.MenuClosed:Fire()
 assert(modal.Visible and player:GetAttribute("SettingsOpen"), "audio panel after native Escape menu")
 guiService.MenuOpened:Fire(); guiService.MenuClosed:Fire()
 assert(not modal.Visible and not player:GetAttribute("SettingsOpen"), "second menu cycle returns to game")
+local shortcut
+for _,item in gui:GetChildren() do if item.Text=="Настройки · F10" then shortcut=item end end
+assert(shortcut and gui.IgnoreGuiInset, "settings and score use viewport coordinates")
+local leftAlt={KeyCode=Enum.KeyCode.LeftAlt}
+local rightAlt={KeyCode=Enum.KeyCode.RightAlt}
+input.InputBegan:Fire(leftAlt)
+renders.RobostrikeSettingsMouse()
+assert(player:GetAttribute("HUDCursorFree") and shortcut.Modal and input.MouseIconEnabled)
+assert(input.MouseDeltaSensitivity==0 and not player:GetAttribute("SettingsOpen"), "Alt releases cursor without opening settings")
+input.InputBegan:Fire(rightAlt)
+input.InputEnded:Fire(leftAlt)
+assert(player:GetAttribute("HUDCursorFree"), "both Alt keys are tracked independently")
+shortcut.Activated:Fire()
+assert(modal.Visible, "HUD settings remain clickable while Alt is held")
+sensitivityTrack.InputBegan:Fire(sensitivityMouse)
+input.InputEnded:Fire(sensitivityMouse)
+assert(input.MouseDeltaSensitivity==0, "changing sensitivity does not enable camera rotation during Alt")
+input.InputEnded:Fire(rightAlt)
+assert(not player:GetAttribute("HUDCursorFree") and not shortcut.Modal and input.MouseDeltaSensitivity==2)
+assert(modal.Visible and player:GetAttribute("SettingsOpen"), "releasing Alt does not close settings")
+close.Activated:Fire()
+input.InputBegan:Fire(leftAlt)
+input.WindowFocusReleased:Fire()
+assert(not player:GetAttribute("HUDCursorFree") and input.MouseDeltaSensitivity==2, "focus loss clears held Alt")
 local visibility=(function()
 -- VISIBILITY_MODULE_HERE
 end)()
@@ -177,6 +201,7 @@ local actors=Instance.new("Folder"); actors.Name="SessionActors"; actors.Parent=
 function workspace:GetServerTimeNow() return 10 end
 player.UserId,player.Name=85,"Host"
 player:SetAttribute("SessionAdmin",true)
+player:SetAttribute("InSession",true)
 services.Players={GetPlayers=function() return {player} end}
 services.ReplicatedStorage=replicated
 services.Debris={AddItem=function() end}
@@ -191,6 +216,10 @@ local hud=(function()
 end)()
 hud.start(player)
 renders.RobostrikeSessionHUD()
+local sessionGui=playerGui:FindFirstChild("SessionHUD")
+local score
+for _,item in sessionGui:GetChildren() do if item.RichText then score=item end end
+assert(sessionGui.IgnoreGuiInset and score and shortcut.Position[4]+shortcut.Size[2]<score.Position[4], "settings are above score with a gap")
 local setupPanel,zero,start
 for _,obj in playerGui:FindFirstChild("SessionHUD"):GetDescendants() do
 	if obj.Name=="SessionSetup" then setupPanel=obj end

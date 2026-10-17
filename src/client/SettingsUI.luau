@@ -9,7 +9,7 @@ local Settings = {}
 function Settings.start(player: Player)
 	Audio.start()
 	local gui = Instance.new("ScreenGui")
-	gui.Name, gui.ResetOnSpawn, gui.DisplayOrder = "AudioSettings", false, 50
+	gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset, gui.DisplayOrder = "AudioSettings", false, true, 50
 	gui.Parent = player:WaitForChild("PlayerGui")
 	local function button(parent: Instance, text: string, size: UDim2, position: UDim2): TextButton
 		local b = Instance.new("TextButton")
@@ -20,7 +20,7 @@ function Settings.start(player: Player)
 		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
 		return b
 	end
-	local shortcut = button(gui, "Настройки · F10", UDim2.fromOffset(160, 32), UDim2.new(1, -180, 0, 8))
+	local shortcut = button(gui, "Настройки · F10", UDim2.fromOffset(160, 32), UDim2.new(1, -184, 0, 8))
 	local shade = button(gui, "", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0))
 	shade.Name, shade.BackgroundColor3, shade.BackgroundTransparency = "SettingsModal", Color3.new(0, 0, 0), 0.3
 	shade.AutoButtonColor, shade.Modal, shade.Visible = false, true, false
@@ -51,6 +51,33 @@ function Settings.start(player: Player)
 		player:SetAttribute("SettingsOpen", value or native)
 	end
 	local sensitivity = 1
+	local cursorFree = false
+	local altKeys: { [Enum.KeyCode]: boolean } = {}
+	local function setCursorFree(value: boolean)
+		cursorFree = value
+		-- A visible modal button releases Roblox's first-person mouse lock.
+		shortcut.Modal = value
+		-- Only mouse-look deltas are suppressed; the OS cursor still moves normally.
+		UserInputService.MouseDeltaSensitivity = if value then 0 else sensitivity
+		player:SetAttribute("HUDCursorFree", value)
+	end
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			altKeys[input.KeyCode] = true
+			setCursorFree(true)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			altKeys[input.KeyCode] = nil
+			setCursorFree(next(altKeys) ~= nil)
+		end
+	end)
+	UserInputService.WindowFocusReleased:Connect(function()
+		table.clear(altKeys)
+		setCursorFree(false)
+	end)
+	setCursorFree(false)
 	local function get(channel: string): number
 		return if channel == "Sensitivity" then sensitivity else Audio.get(channel)
 	end
@@ -70,7 +97,7 @@ function Settings.start(player: Player)
 			value = math.clamp(value, minimum, maximum)
 			if channel == "Sensitivity" then
 				sensitivity = value
-				UserInputService.MouseDeltaSensitivity = value
+				UserInputService.MouseDeltaSensitivity = if cursorFree then 0 else value
 			else
 				Audio.set(channel, value)
 			end
@@ -118,7 +145,7 @@ function Settings.start(player: Player)
 		setOpen(openAfterNative)
 	end)
 	RunService:BindToRenderStep("RobostrikeSettingsMouse", Enum.RenderPriority.Camera.Value + 10, function()
-		if open or native then
+		if open or native or cursorFree then
 			UserInputService.MouseIconEnabled = true
 			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		end

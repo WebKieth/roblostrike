@@ -53,6 +53,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	local pendingBots = botsPerTeam
 	local template: Model? = nil
 	local requests: { [Player]: number } = {}
+	local directory: any = nil
 	for _, id in { "Red", "Blue" } do
 		local team = Instance.new("Team")
 		team.Name, team.AutoAssignable = id, false
@@ -62,16 +63,13 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		state:SetAttribute(id .. "Wins", 0)
 		for i = 1, Rules.TeamSize do slots[id][i] = {} end
 	end
-	state:SetAttribute("Phase", "WaitingAdmin")
+	state:SetAttribute("Phase", "Browsing")
 	state:SetAttribute("Started", false)
 	state:SetAttribute("BotsPerTeam", botsPerTeam)
 	state:SetAttribute("PendingBotsPerTeam", pendingBots)
 
 	local function isAdmin(player: Player): boolean
-		local id = if Rules.AdminUserId ~= 0 then Rules.AdminUserId else game.CreatorId
-		local studioHost = RunService:IsStudio() and Rules.AdminUserId == 0
-			and (game.CreatorId == 0 or player.UserId <= 0) and Players:GetPlayers()[1] == player
-		return player.UserId == id or studioHost
+		return player.UserId == state:GetAttribute("OwnerUserId")
 	end
 	local function adminPresent(): boolean
 		for _, player in Players:GetPlayers() do if isAdmin(player) then return true end end
@@ -82,7 +80,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		return model ~= nil and model.Parent ~= nil and h ~= nil and h.Health > 0
 	end
 	local function lock(player: Player)
-		local blocked = state:GetAttribute("Phase") ~= "Combat" or player:GetAttribute("TeamMenuOpen") == true
+		local blocked = not player:GetAttribute("InSession") or state:GetAttribute("Phase") ~= "Combat" or player:GetAttribute("TeamMenuOpen") == true
 		local model = player.Character
 		local root = if model then model:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
 		if root and alive(model) then
@@ -94,7 +92,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			end
 			if blocked then Movement.freeze(player) else Movement.resume(player) end
 		end
-		player:SetAttribute("SessionBlocked", state:GetAttribute("Phase") ~= "Combat")
+		player:SetAttribute("SessionBlocked", not player:GetAttribute("InSession") or state:GetAttribute("Phase") ~= "Combat")
 	end
 	local function phase(value: string, duration: number?)
 		state:SetAttribute("Phase", value)
@@ -256,6 +254,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		phase("Freeze", Rules.FreezeSeconds)
 	end
 	local function stop()
+		if directory then directory.close() end
 		active = false
 		launched, botsPerTeam = false, Rules.TeamSize
 		pendingBots = botsPerTeam
@@ -264,7 +263,9 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		state:SetAttribute("PendingBotsPerTeam", pendingBots)
 		state:SetAttribute("SetupError", nil)
 		generation += 1
-		phase("WaitingAdmin")
+		state:SetAttribute("OwnerUserId", nil)
+		state:SetAttribute("ServerName", nil)
+		phase("Browsing")
 		clearModels()
 		round = 0
 		for id, roster in slots do
@@ -275,22 +276,36 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			player.Team = nil
 			player:SetAttribute("TeamId", nil)
 			player:SetAttribute("TeamMenuOpen", false)
+			player:SetAttribute("InSession", false)
+			player:SetAttribute("SessionAdmin", false)
 		end
 	end
 	local function activate()
 		if active or not adminPresent() then return end
 		active = true
 		phase("Lobby")
-		for _, player in Players:GetPlayers() do player:SetAttribute("TeamMenuOpen", true) end
+	end
+	local function joined(player: Player)
+		local count = 0
+		for _, other in Players:GetPlayers() do if other:GetAttribute("InSession") then count += 1 end end
+		if count >= Rules.TeamSize * 2 then
+			player:SetAttribute("DirectoryError", "Сервер заполнен. Выберите другой сервер.")
+			return
+		end
+		player:SetAttribute("InSession", true)
+		player:SetAttribute("TeamMenuOpen", true)
+		player:SetAttribute("TeamMenuError", nil)
+		player:SetAttribute("DirectoryError", nil)
 	end
 	local function added(player: Player)
 		player:SetAttribute("SessionAdmin", isAdmin(player))
 		player:SetAttribute("SessionBlocked", true)
-		player:SetAttribute("TeamMenuOpen", active)
-		activate()
+		player:SetAttribute("TeamMenuOpen", false)
+		player:SetAttribute("InSession", false)
+		if directory then directory.added(player) end
 	end
 	Players.PlayerAdded:Connect(added)
-	Players.PlayerRemoving:Connect(function(player)
+	local function removing(player: Player)
 		requests[player] = nil
 		lastPose[player] = nil
 		if isAdmin(player) then stop(); return end
@@ -321,9 +336,15 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 				end
 			end
 		end
-	end)
+		player.Team = nil
+		player:SetAttribute("TeamId", nil)
+		player:SetAttribute("TeamMenuOpen", false)
+		player:SetAttribute("InSession", false)
+		player:SetAttribute("SessionBlocked", true)
+	end
+	Players.PlayerRemoving:Connect(removing)
 	menu.OnServerEvent:Connect(function(player, open)
-		if not active or typeof(open) ~= "boolean" then return end
+		if not active or not player:GetAttribute("InSession") or typeof(open) ~= "boolean" then return end
 		if not launched and not open then return end
 		if not open and not player:GetAttribute("TeamId") then return end
 		player:SetAttribute("TeamMenuOpen", open)
@@ -370,7 +391,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		end
 	end)
 	choose.OnServerEvent:Connect(function(player, id)
-		if not active or starting or mutating or (id ~= "Red" and id ~= "Blue") then return end
+		if not active or not player:GetAttribute("InSession") or starting or mutating or (id ~= "Red" and id ~= "Blue") then return end
 		if not player:GetAttribute("TeamMenuOpen") then return end
 		local now = os.clock()
 		if now - (requests[player] or -math.huge) < 0.5 then return end
@@ -380,20 +401,21 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		local index = 0
 		for i, slot in slots[id] do
 			if slot.player == player then destination, index = slot, i; break end
-			if not slot.player and (not destination or alive(slot.model)) then destination, index = slot, i end
+			if not slot.player and (not destination or alive(slot.model) or (botsPerTeam == 0 and not slot.model)) then destination, index = slot, i end
 		end
 		if not destination then player:SetAttribute("TeamMenuError", "Команда заполнена"); return end
 		player:SetAttribute("TeamMenuError", nil)
 		-- All roster mutations happen before yielding to character creation.
 		mutating = true
 		local inherited = destination.model
-		local canEnter = previous == nil and alive(inherited) and state:GetAttribute("Phase") ~= "Intermission"
-		local frame = if canEnter then (inherited:FindFirstChild("HumanoidRootPart") :: BasePart).CFrame else Rules.spawn(id, index)
-		local health = if canEnter then (inherited:FindFirstChildOfClass("Humanoid") :: Humanoid).Health else 100
-		local armor = if canEnter then inherited:GetAttribute("Armor") or 0 else 0
-		local helmet = canEnter and inherited:GetAttribute("Helmet") == true
+		local emptySandboxSlot = botsPerTeam == 0 and launched and inherited == nil
+		local canEnter = previous == nil and (alive(inherited) or emptySandboxSlot) and state:GetAttribute("Phase") ~= "Intermission"
+		local frame = if canEnter and inherited then (inherited:FindFirstChild("HumanoidRootPart") :: BasePart).CFrame else Rules.spawn(id, index)
+		local health = if canEnter and inherited then (inherited:FindFirstChildOfClass("Humanoid") :: Humanoid).Health else 100
+		local armor = if canEnter and inherited then inherited:GetAttribute("Armor") or 0 else 0
+		local helmet = canEnter and inherited ~= nil and inherited:GetAttribute("Helmet") == true
 		local inventory: any = {}
-		if canEnter then
+		if canEnter and inherited then
 			for _, child in inherited:GetChildren() do
 				if child:IsA("Tool") then
 					inventory[child:GetAttribute("WeaponSlot")] = { Ammo = child:GetAttribute("Ammo"), ReserveAmmo = child:GetAttribute("ReserveAmmo") }
@@ -455,6 +477,13 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			phase("Intermission", Rules.IntermissionSeconds)
 		end
 	end)
+	directory = require(script.Parent.ServerDirectory).start(remotes, state, function(player: Player, name: string)
+		state:SetAttribute("OwnerUserId", player.UserId)
+		state:SetAttribute("ServerName", name)
+		player:SetAttribute("SessionAdmin", true)
+		joined(player)
+		activate()
+	end, joined, removing)
 	for _, player in Players:GetPlayers() do added(player) end
 end
 

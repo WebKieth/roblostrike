@@ -108,6 +108,10 @@ local survival = (function()
 -- SURVIVAL_MODULE_HERE
 end)()
 local loadout = {}
+local weapons = {
+	[1]={Magazine=30,HotbarSlot=1}, [2]={Magazine=17},
+	[6]={Magazine=30,HotbarSlot=1}, [7]={Magazine=100,HotbarSlot=1},
+}
 function loadout.create(slot)
 	local tool = Instance.new("Tool")
 	tool.Name="Gun"..slot
@@ -127,17 +131,25 @@ function loadout.find(_,slot)
 	return nil
 end
 function loadout.equip(_,slot)
-	local tool = loadout.find(player,slot)
+	local tool = loadout.findHotbar(player,slot)
 	if tool then tool.Parent=character end
+end
+function loadout.findHotbar(_,slot)
+	for id,definition in weapons do
+		if (definition.HotbarSlot or id)==slot then
+			local tool=loadout.find(player,id)
+			if tool then return tool end
+		end
+	end
 end
 local game = {GetService=function(_,name)
 	if name=="Players" then return players end
-	if name=="ReplicatedStorage" then return {Shared={Survival="survival"}} end
+	if name=="ReplicatedStorage" then return {Shared={Survival="survival",Weapons="weapons"}} end
 	if name=="RunService" then return {Heartbeat=heartbeat} end
 	return storage
 end}
 local script = {Parent={Loadout="loadout"}}
-local require = function(name) return if name=="survival" then survival else loadout end
+local require = function(name) return if name=="survival" then survival else if name=="weapons" then weapons else loadout end
 local Loot = (function()
 -- LOOT_MODULE_HERE
 end)()
@@ -146,35 +158,35 @@ Loot.start(remotes)
 local folder = workspace:FindFirstChild("Loot")
 local function step(dt) clock+=dt; heartbeat:Fire(dt) end
 local function count() return #folder:GetChildren() end
-assert(count()==8, "four items in each room")
+assert(count()==12, "six items in each room")
 root.Position=V(-10,3.1,-10)
 step(.1)
 assert(character:GetAttribute("Armor")==100 and not character:GetAttribute("Helmet"))
-assert(count()==7)
+assert(count()==11)
 step(.1)
-assert(count()==7, "full armor leaves loot untouched")
+assert(count()==11, "full armor leaves loot untouched")
 root.Position=V(3,3.1,-10)
 step(.1)
-assert(count()==7 and not character:GetAttribute("Helmet"), "no upgrade pickup with full armor")
+assert(count()==11 and not character:GetAttribute("Helmet"), "no upgrade pickup with full armor")
 character:SetAttribute("Armor",80)
 step(.1)
-assert(count()==6 and character:GetAttribute("Helmet"))
+assert(count()==10 and character:GetAttribute("Helmet"))
 root.Position=V(100,3.1,100)
 step(59.71)
-assert(count()==7, "first armor respawns after its own 60 seconds")
+assert(count()==11, "first armor respawns after its own 60 seconds")
 step(.3)
-assert(count()==8, "second armor has independent timer")
+assert(count()==12, "second armor has independent timer")
 root.Position=V(-25,3.1,-10)
 player:SetAttribute("SelectedSlot",1)
 step(.1)
 local gun = loadout.find(player,1)
-assert(gun and gun.Parent==character and count()==7, "auto pickup into empty slot")
+assert(gun and gun.Parent==character and count()==11, "auto pickup into empty slot")
 gun:SetAttribute("Ammo",7)
 gun:SetAttribute("ReserveAmmo",23)
 root.Position=V(0,3.1,-10)
 local drop = remotes:FindFirstChild("DropWeapon")
 drop.OnServerEvent:Fire(player)
-assert(not loadout.find(player,1) and count()==8)
+assert(not loadout.find(player,1) and count()==12)
 assert(character:GetAttribute("DroppedSlot1"))
 step(.01)
 assert(not loadout.find(player,1), "cannot reclaim in flight")
@@ -193,9 +205,30 @@ drop.OnServerEvent:Fire(player)
 assert(not loadout.find(player,1))
 for _=1,50 do step(.01) end
 assert(loadout.find(player,1)==gun, "near-wall throw falls and automatically returns")
--- Occupied weapon slots never consume room pickups.
+-- Same model replenishes reserve only, capped at three spare magazines.
 root.Position=V(-25,3.1,-65)
 local before=count()
 step(.1)
-assert(count()==before, "occupied rifle slot rejects another rifle")
+assert(count()==before-1 and gun:GetAttribute("ReserveAmmo")==90)
+assert(gun:GetAttribute("Ammo")==7, "pickup does not silently reload the current magazine")
+root.Position=V(-25,3.1,-10)
+step(60)
+before=count()
+step(.1)
+assert(count()==before, "full reserve leaves identical weapon untouched")
+root.Position=V(-25,3.1,-6)
+before=count()
+step(.1)
+assert(count()==before and not loadout.find(player,6), "different primary cannot refill or replace M4")
+gun:Destroy()
+step(.1)
+local ak=loadout.find(player,6)
+assert(ak and ak.Parent==character, "AK picked up and equipped through hotbar key 1")
+root.Position=V(-18,3.1,-6)
+before=count()
+step(.1)
+assert(count()==before and not loadout.find(player,7), "only one primary can be carried")
+ak:Destroy()
+step(.1)
+assert(loadout.find(player,7), "M249 available in the room")
 print("Loot: auto pickup, independent cooldowns, preserved ammo, arc, wall and reclaim OK")

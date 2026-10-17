@@ -86,6 +86,7 @@ function Combat.start(player: Player)
 	UserInputService.TextBoxFocused:Connect(release)
 	GuiService.MenuOpened:Connect(release)
 	player:GetAttributeChangedSignal("SettingsOpen"):Connect(release)
+	player:GetAttributeChangedSignal("HUDCursorFree"):Connect(release)
 	player.CharacterRemoving:Connect(function()
 		release()
 		currentTool = nil
@@ -100,7 +101,7 @@ function Combat.start(player: Player)
 			return Enum.ContextActionResult.Sink
 		end
 		local pressed = inputState == Enum.UserInputState.Begin
-		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") or player:GetAttribute("SettingsOpen") then release(); return Enum.ContextActionResult.Pass end
+		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") or player:GetAttribute("SettingsOpen") or player:GetAttribute("HUDCursorFree") then release(); return Enum.ContextActionResult.Pass end
 		if pressed and UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if pressed and not held then held, queued = true, true

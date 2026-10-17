@@ -73,11 +73,27 @@ class WeaponViewTests(unittest.TestCase):
             self.assertIn('Procedural = true', slot)
 
     def test_hand_anchors_for_all_slots_and_support_for_rifle(self):
-        self.assertEqual(len(self.slots), 5)  # Two grenade Tools share hotbar key 4.
+        self.assertEqual(len(self.slots), 7)  # Grenades share key 4; rifles share key 1.
         for slot in self.slots:
             self.assertIn("RightHand = Vector3.new(", slot)
         self.assertIn("LeftHand = Vector3.new(", self.slots[0])
-        self.assertTrue(all("LeftHand =" not in slot for slot in self.slots[1:]))
+        self.assertTrue(all("LeftHand =" not in slot for slot in self.slots[1:5]))
+        for slot in self.slots[5:]:
+            self.assertIn("LeftHand =", slot)
+            self.assertIn("HotbarSlot = 1", slot)
+
+    def test_new_weapon_balance(self):
+        self.assertIn("DamageMultiplier = 0.9", self.slots[0])
+        for slot, name, damage, spread, magazine in (
+            (self.slots[5], "AK-47", "1", "1", 30),
+            (self.slots[6], "M249", "1.2", "1.2", 100),
+        ):
+            self.assertIn(f'ModelName = "{name}"', slot)
+            self.assertIn(f"DamageMultiplier = {damage},", slot)
+            self.assertIn(f"SpreadMultiplier = {spread},", slot)
+            self.assertIn(f"Magazine = {magazine},", slot)
+            self.assertIn("Procedural = true", slot)
+            self.assertIn("Automatic = true", slot)
 
 
 if __name__ == "__main__":

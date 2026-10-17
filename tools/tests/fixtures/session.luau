@@ -139,9 +139,14 @@ local movement = (function()
 	local OverlapParams={new=function() return {} end}
 -- MOVEMENT_MODULE_HERE
 end)()
-local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision",Movement="movement"}}
+local createSession, joinSession
+local directory = {start=function(_, _, created, joined)
+	createSession, joinSession = created, joined
+	return {added=function() end, close=function() end}
+end}
+local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision",Movement="movement",ServerDirectory="directory"}}
 local require = function(name)
-	return ({config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
+	return ({directory=directory,config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
 local task = {
@@ -156,6 +161,7 @@ end)()
 local function add(id)
 	local p=Instance.new("Player"); p.Name,p.UserId,p.Parent="Player"..id,id,players
 	table.insert(players.list,p); players.PlayerAdded:Fire(p)
+	if joinSession and replicated:FindFirstChild("SessionState"):GetAttribute("OwnerUserId") then joinSession(p) end
 	return p
 end
 local friend=add(100)
@@ -178,10 +184,13 @@ local choose=remotes:FindFirstChild("ChooseTeam").OnServerEvent
 local menu=remotes:FindFirstChild("TeamMenu").OnServerEvent
 local setup=remotes:FindFirstChild("SessionSetup").OnServerEvent
 local function tick(seconds) clock+=seconds; run.Heartbeat:Fire(seconds) end
-assert(state:GetAttribute("Phase")=="WaitingAdmin" and spawnCount==0 and not friend.Character)
+assert(state:GetAttribute("Phase")=="Browsing" and spawnCount==0 and not friend.Character)
 choose:Fire(friend,"Blue")
 assert(friend:GetAttribute("TeamId")==nil)
-local admin=add(85)
+local admin=add(200) -- Any user, not game.CreatorId, can own a session.
+assert(state:GetAttribute("Phase")=="Browsing" and not admin:GetAttribute("SessionAdmin"))
+createSession(admin,"Тестовый сервер")
+joinSession(friend)
 assert(state:GetAttribute("Phase")=="Lobby" and friend:GetAttribute("TeamMenuOpen"))
 assert(admin:GetAttribute("SessionAdmin") and not friend:GetAttribute("SessionAdmin"))
 setup:Fire(friend,"Bots",0)
@@ -201,9 +210,9 @@ if scenario=="no_bots" then
 	menu:Fire(admin,true)
 	choose:Fire(friend,"Red")
 	setup:Fire(friend,"Start")
-	assert(spawnCount==1, "non-admin cannot launch")
+	assert(spawnCount==2 and friend.Character, "late join immediately spawns in a bot-free session; non-admin cannot restart")
 	setup:Fire(admin,"Restart")
-	assert(state:GetAttribute("Started") and state:GetAttribute("Phase")=="Freeze" and spawnCount==3)
+	assert(state:GetAttribute("Started") and state:GetAttribute("Phase")=="Freeze" and spawnCount==4)
 	for _,roster in capturedSlots do
 		for _,s in roster do if not s.player then assert(not s.model, "no filler bots") end end
 	end
@@ -399,6 +408,6 @@ for _, s in capturedSlots.Red do
 end
 assert(replacement and replacement:FindFirstChildOfClass("Humanoid").Health==37, "disconnect backfills bot without a fresh life")
 players.PlayerRemoving:Fire(admin)
-assert(state:GetAttribute("Phase")=="WaitingAdmin" and state:GetAttribute("BlueWins")==0)
+assert(state:GetAttribute("Phase")=="Browsing" and state:GetAttribute("BlueWins")==0)
 assert(not friend:GetAttribute("TeamId"))
 print("Session: admin gate, 3v3, collision, freeze, takeover, menus, elimination, draw and shutdown OK")

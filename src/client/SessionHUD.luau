@@ -15,6 +15,7 @@ function SessionHUD.start(player: Player)
 	local state = ReplicatedStorage:WaitForChild("SessionState")
 	SessionMusic.start(state)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	require(script.Parent.ServerBrowser).start(player, remotes)
 	local choose = remotes:WaitForChild("ChooseTeam") :: RemoteEvent
 	local menu = remotes:WaitForChild("TeamMenu") :: RemoteEvent
 	local setup = remotes:WaitForChild("SessionSetup") :: RemoteEvent
@@ -30,13 +31,13 @@ function SessionHUD.start(player: Player)
 		text.Text, text.Parent = "", parent
 		return text
 	end
-	local score = label(gui, UDim2.fromOffset(270, 52), UDim2.new(1, -294, 0, 44), 22)
+	local score = label(gui, UDim2.fromOffset(270, 52), UDim2.new(1, -294, 0, 64), 22)
 	score.BackgroundColor3, score.BackgroundTransparency = Color3.fromRGB(15, 20, 30), 0.2
 	score.RichText = true
 	Instance.new("UICorner", score).CornerRadius = UDim.new(0, 8)
 	local banner = label(gui, UDim2.new(1, 0, 0, 72), UDim2.new(0, 0, 0, 100), 26)
 	local spectator = label(gui, UDim2.new(1, -40, 0, 50), UDim2.new(0, 20, 1, -115), 18)
-	local hint = label(gui, UDim2.fromOffset(270, 28), UDim2.new(1, -294, 0, 98), 13)
+	local hint = label(gui, UDim2.fromOffset(270, 28), UDim2.new(1, -294, 0, 118), 13)
 	hint.Text = "M — выбор команды"
 	local overlay = Instance.new("Frame")
 	overlay.Size, overlay.BackgroundColor3, overlay.BackgroundTransparency = UDim2.fromScale(1, 1), Color3.fromRGB(6, 10, 19), 0.25
@@ -83,6 +84,18 @@ function SessionHUD.start(player: Player)
 	start.BackgroundColor3, start.TextColor3, start.Parent = Color3.fromRGB(49, 130, 93), Color3.new(1, 1, 1), setupPanel
 	Instance.new("UICorner", start).CornerRadius = UDim.new(0, 8)
 	start.Activated:Connect(function() setup:FireServer(if state:GetAttribute("Started") then "Restart" else "Start") end)
+	local leave = Instance.new("TextButton")
+	leave.Size, leave.Position = UDim2.fromOffset(180, 30), UDim2.new(0.5, -90, 1, 8)
+	leave.Text, leave.Font, leave.TextSize = "Выйти с сервера", Enum.Font.GothamMedium, 14
+	leave.BackgroundColor3, leave.TextColor3, leave.Parent = Color3.fromRGB(80, 43, 48), Color3.new(1, 1, 1), panel
+	local leaving = false
+	leave.Activated:Connect(function()
+		if leaving then return end
+		leaving = true
+		local ok, result = pcall(function() return (remotes:WaitForChild("ServerDirectory") :: RemoteFunction):InvokeServer("Leave") end)
+		if not ok or (result and result.error) then leave.Text = "Повторить выход" end
+		leaving = false
+	end)
 	ContextActionService:BindActionAtPriority("RobostrikeTeamMenu", function(_, inputState)
 		if player:GetAttribute("SettingsOpen") then return Enum.ContextActionResult.Sink end
 		if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -152,11 +165,11 @@ function SessionHUD.start(player: Player)
 	local sentAt = 0
 	RunService:BindToRenderStep("RobostrikeSessionHUD", Enum.RenderPriority.Camera.Value + 5, function()
 		local current = state:GetAttribute("Phase")
-		local waiting = current == "WaitingAdmin"
-		local configuring = current == "Lobby" and state:GetAttribute("Started") ~= true
+		local browsing = player:GetAttribute("InSession") ~= true
+		local configuring = not browsing and current == "Lobby" and state:GetAttribute("Started") ~= true
 		local admin = player:GetAttribute("SessionAdmin") == true
 		local bots = state:GetAttribute("BotsPerTeam") or Rules.TeamSize
-		local open = (player:GetAttribute("TeamMenuOpen") == true or configuring) and not waiting
+		local open = (player:GetAttribute("TeamMenuOpen") == true or configuring) and not browsing
 		local restarting = admin and open and not configuring and state:GetAttribute("Started") == true
 		local editable = (configuring or restarting) and current ~= "Preparing"
 		if restarting then bots = state:GetAttribute("PendingBotsPerTeam") or bots end
@@ -170,22 +183,22 @@ function SessionHUD.start(player: Player)
 			b.BackgroundColor3 = if count == bots then Color3.fromRGB(51, 130, 191) else Color3.fromRGB(37, 49, 65)
 		end
 		start.Interactable = admin and editable
-		start.Text = if restarting then "ПЕРЕЗАПУСТИТЬ СЕССИЮ" elseif admin then "НАЧАТЬ СЕССИЮ" else "ОЖИДАНИЕ АДМИНИСТРАТОРА"
-		overlay.Visible, hint.Visible = open or waiting, not waiting
-		UserInputService.MouseIconEnabled = open or waiting
-		if open or waiting then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
+		start.Text = if restarting then "ПЕРЕЗАПУСТИТЬ СЕССИЮ" elseif admin then "НАЧАТЬ СЕССИЮ" else "ОЖИДАНИЕ СОЗДАТЕЛЯ"
+		overlay.Visible, hint.Visible, score.Visible, banner.Visible = open, not browsing, not browsing, not browsing
+		UserInputService.MouseIconEnabled = open or browsing
+		if open or browsing then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 		score.Text = string.format('<font color="#E24146">КРАСНЫЕ  %d</font>  :  <font color="#4191F5">%d  СИНИЕ</font>', state:GetAttribute("RedWins") or 0, state:GetAttribute("BlueWins") or 0)
-		subtitle.Text = if waiting then "Ожидание администратора" else string.format("Выбери команду · бой %d × %d", Rules.TeamSize, Rules.TeamSize)
-		footnote.Text = player:GetAttribute("TeamMenuError") or state:GetAttribute("SetupError") or (if waiting then "Сессия начнётся, когда подключится владелец игры."
-			elseif configuring then (if bots == 0 then "Выбери команду — можно играть одному. Сессия без ботов длится до выхода или перезапуска из меню M."
-				else "Выберите команды. Боты займут свободные места. Количество ботов задаёт администратор перед стартом.")
+		subtitle.Text = string.format("%s · бой %d × %d", state:GetAttribute("ServerName") or "Выбери команду", Rules.TeamSize, Rules.TeamSize)
+		footnote.Text = player:GetAttribute("TeamMenuError") or state:GetAttribute("SetupError") or (if configuring then (if bots == 0 then "Выбери команду — можно играть одному. Другие игроки смогут найти сервер и подключиться позже."
+				else "Выберите команды. Боты займут свободные места. Количество ботов задаёт создатель сервера.")
 			elseif restarting then "Выбери команду и количество ботов. Перезапуск сбросит счёт и вернёт всех на спавн.\nБез перезапуска новые настройки не применяются. M — закрыть."
 			elseif player:GetAttribute("TeamId") then "Выбор любой команды = смерть и наблюдение до нового раунда.\nM — закрыть меню. Пока меню открыто, тебя могут убить."
+			elseif bots == 0 then "Выбери свободную команду, чтобы сразу подключиться к игре."
 			else "Ты займёшь место бота. Если он погиб — вступишь в следующем раунде.")
 		for id, button in buttons do
 			local count = 0
 			for _, other in Players:GetPlayers() do if other:GetAttribute("TeamId") == id then count += 1 end end
-			button.Visible = not waiting
+			button.Visible = true
 			button.Interactable = current ~= "Preparing" and (count < Rules.TeamSize or player:GetAttribute("TeamId") == id)
 			button.Text = string.format("%s\n%d / %d игроков", if id == "Red" then "КРАСНЫЕ" else "СИНИЕ", count, Rules.TeamSize)
 		end

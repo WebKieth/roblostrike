@@ -34,6 +34,8 @@ class ClientPresentationTests(unittest.TestCase):
             source = (ROOT / f'src/client/{name}.luau').read_text()
             self.assertIn('player:GetAttribute("SettingsOpen")', source)
             self.assertIn('GetAttributeChangedSignal("SettingsOpen")', source)
+            self.assertIn('player:GetAttribute("HUDCursorFree")', source)
+            self.assertIn('GetAttributeChangedSignal("HUDCursorFree")', source)
 
 
 if __name__ == '__main__':

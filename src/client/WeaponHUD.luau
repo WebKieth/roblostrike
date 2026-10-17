@@ -88,6 +88,18 @@ function HUD.new(playerGui: PlayerGui)
 	local controller = {}
 	function controller:highlight(slot: number)
 		for index, row in rows do
+			if index == 1 then
+				local name = "Основное оружие"
+				for _, container in { player.Character, player:FindFirstChildOfClass("Backpack") } do
+					if not container then continue end
+					for _, tool in container:GetChildren() do
+						local weaponSlot = tool:GetAttribute("WeaponSlot")
+						local definition = if typeof(weaponSlot) == "number" then Weapons[weaponSlot] else nil
+						if tool:IsA("Tool") and definition and definition.HotbarSlot == 1 then name = definition.ModelName end
+					end
+				end
+				row.Text = "  1    " .. name
+			end
 			local selected = index == slot
 			row.BackgroundTransparency = if selected then 0 else 1
 			row.BackgroundColor3 = Color3.fromRGB(46, 91, 108)

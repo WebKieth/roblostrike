@@ -16,7 +16,7 @@ function Knife.start(player: Player, combat: any)
 	local started, due, lastAim = 0, 0, 0
 	local slashHeld, stabHeld = false, false
 	local function equipped(): Tool?
-		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") or player:GetAttribute("SettingsOpen") then return nil end
+		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") or player:GetAttribute("SettingsOpen") or player:GetAttribute("HUDCursorFree") then return nil end
 		local character = player.Character
 		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 		local tool = if character then character:FindFirstChildOfClass("Tool") else nil
@@ -34,6 +34,7 @@ function Knife.start(player: Player, combat: any)
 	UserInputService.TextBoxFocused:Connect(cancel)
 	GuiService.MenuOpened:Connect(cancel)
 	player:GetAttributeChangedSignal("SettingsOpen"):Connect(cancel)
+	player:GetAttributeChangedSignal("HUDCursorFree"):Connect(cancel)
 	player.CharacterRemoving:Connect(cancel)
 	local function begin(kind: string)
 		local camera = workspace.CurrentCamera

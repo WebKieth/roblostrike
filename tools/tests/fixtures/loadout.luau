@@ -106,11 +106,11 @@ replacement.Parent = player
 flush()
 equipped = character:FindFirstChildOfClass("Tool")
 assert(equipped and equipped.Name == "M4A1", "replacement must recover equipped weapon")
-assert(#replacement:GetChildren() == #weapons - 1, "remaining weapons restored exactly once")
+assert(#replacement:GetChildren() == 4, "default weapons restored; pickup-only models excluded")
 Loadout.give(player, true)
 Loadout.equip(player, 1)
 flush()
-assert(#replacement:GetChildren() == #weapons - 1, "recovery must not duplicate tools")
+assert(#replacement:GetChildren() == 4, "recovery must not duplicate tools")
 Loadout.equip(player, 4)
 equipped = character:FindFirstChildOfClass("Tool")
 assert(equipped:GetAttribute("WeaponSlot") == 4 and equipped:GetAttribute("Ammo") == 3)
@@ -140,4 +140,23 @@ for _, child in pistol:FindFirstChildOfClass("Part"):GetChildren() do pistolPart
 assert(pistolParts.GlockSlide and pistolParts.PolymerFrame and pistolParts.TriggerSafety, "Glock geometry is built")
 assert(not pistolParts.Toggle and not pistolParts.WoodGripPanel, "no Luger geometry remains")
 assert(not pistolParts.GlockSlide.Anchored and pistolParts.GlockSlide:FindFirstChildOfClass("WeldConstraint"), "world pistol is welded")
+for slot, expected in {[6]={"AKReceiver",30,90}, [7]={"M249Receiver",100,300}} do
+	local primary = Loadout.create(slot)
+	assert(primary:GetAttribute("Ammo")==expected[2] and primary:GetAttribute("ReserveAmmo")==expected[3])
+	local found=false
+	for _, part in primary:FindFirstChildOfClass("Part"):GetChildren() do
+		if part.Name==expected[1] then found=true end
+	end
+	assert(found, "new primary has distinct geometry")
+	primary.Parent=replacement
+	character:SetAttribute("DroppedSlot1",false)
+	Loadout.give(player,true)
+	assert(not Loadout.find(player,1), "repair does not add M4 beside another primary")
+	Loadout.equip(player,1)
+	assert(character:FindFirstChildOfClass("Tool")==primary and player:GetAttribute("SelectedSlot")==1)
+	Loadout.equip(player,2)
+	Loadout.equip(player,1)
+	assert(character:FindFirstChildOfClass("Tool")==primary, "key 1 re-equips picked-up primary")
+	primary:Destroy()
+end
 print("Loadout: initial equip, visible model, Backpack replacement and idempotent repair OK")

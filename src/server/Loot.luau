@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 local Survival = require(ReplicatedStorage.Shared.Survival)
+local Weapons = require(ReplicatedStorage.Shared.Weapons)
 local Loadout = require(script.Parent.Loadout)
 
 local Loot = {}
@@ -90,6 +91,10 @@ function Loot.start(remotes: Folder)
 			local position = Vector3.new(x, 0.6, z)
 			add(position, if index <= 2 then Loadout.create(index) else nil, index == 4, position)
 		end
+		for index, x in { -25, -18 } do
+			local position = Vector3.new(x, 0.6, z + (if z == -10 then 4 else -4))
+			add(position, Loadout.create(index + 5), nil, position)
+		end
 	end
 
 	drop.OnServerEvent:Connect(function(player: Player)
@@ -102,8 +107,9 @@ function Loot.start(remotes: Folder)
 		local root = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
 		local tool = if character then character:FindFirstChildOfClass("Tool") else nil
 		local slot = if tool then tool:GetAttribute("WeaponSlot") else nil
-		if not character or not humanoid or humanoid.Health <= 0 or not root or not tool or (slot ~= 1 and slot ~= 2) then return end
-		character:SetAttribute("DroppedSlot" .. slot, true)
+		local definition = if typeof(slot) == "number" then Weapons[slot] else nil
+		if not character or not humanoid or humanoid.Health <= 0 or not root or not tool or not definition or not definition.Magazine then return end
+		character:SetAttribute("DroppedSlot" .. (definition.HotbarSlot or slot), true)
 		tool:SetAttribute("Reloading", false)
 		local forward = root.CFrame.LookVector * Vector3.new(1, 0, 1)
 		if forward.Magnitude < 0.001 then forward = Vector3.new(0, 0, -1) end
@@ -175,12 +181,24 @@ function Loot.start(remotes: Folder)
 				if workspace:Raycast(root.Position, item.position - root.Position, params) then continue end
 				if item.tool then
 					local slot = item.tool:GetAttribute("WeaponSlot")
-					if Loadout.find(player, slot) then continue end
-					local backpack = player:FindFirstChildOfClass("Backpack")
-					if not backpack then continue end
-					character:SetAttribute("DroppedSlot" .. slot, false)
-					item.tool.Parent = backpack
-					if player:GetAttribute("SelectedSlot") == slot then Loadout.equip(player, slot) end
+					local definition = Weapons[slot]
+					local hotbarSlot = definition.HotbarSlot or slot
+					local existing = Loadout.find(player, slot)
+					if existing then
+						local reserve = existing:GetAttribute("ReserveAmmo") or 0
+						local available = (item.tool:GetAttribute("Ammo") or 0) + (item.tool:GetAttribute("ReserveAmmo") or 0)
+						local transfer = math.min(definition.Magazine * Survival.SpareMagazines - reserve, available)
+						if transfer <= 0 then continue end
+						existing:SetAttribute("ReserveAmmo", reserve + transfer)
+						item.tool:Destroy()
+					else
+						if Loadout.findHotbar(player, hotbarSlot) then continue end
+						local backpack = player:FindFirstChildOfClass("Backpack")
+						if not backpack then continue end
+						character:SetAttribute("DroppedSlot" .. hotbarSlot, false)
+						item.tool.Parent = backpack
+						if player:GetAttribute("SelectedSlot") == hotbarSlot then Loadout.equip(player, hotbarSlot) end
+					end
 				else
 					if (character:GetAttribute("Armor") or 0) >= Survival.MaxArmor then continue end
 					character:SetAttribute("Armor", Survival.MaxArmor)
