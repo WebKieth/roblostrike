@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Teams = game:GetService("Teams")
 local Rules = require(ReplicatedStorage.Shared.SessionRules)
+local Config = require(ReplicatedStorage.Shared.Config)
 local PoliceSkin = require(script.Parent.PoliceSkin)
 local Loadout = require(script.Parent.Loadout)
 local CharacterCollision = require(script.Parent.CharacterCollision)
@@ -103,7 +104,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			for _, slot in roster do
 				if not slot.player and alive(slot.model) then
 					local h = slot.model:FindFirstChildOfClass("Humanoid") :: Humanoid
-					h.WalkSpeed = if value == "Combat" then 16 else 0
+					h.WalkSpeed = if value == "Combat" then Config.BotSpeed else 0
 					h.JumpPower = if value == "Combat" then 35 else 0
 					h.AutoRotate = value == "Combat"
 					h.Jump = false
@@ -321,7 +322,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 							bot:SetAttribute("Armor", old:GetAttribute("Armor") or 0)
 							bot:SetAttribute("Helmet", old:GetAttribute("Helmet") == true)
 							local combat = state:GetAttribute("Phase") == "Combat"
-							h.WalkSpeed, h.JumpPower, h.AutoRotate = if combat then 16 else 0, if combat then 35 else 0, combat
+							h.WalkSpeed, h.JumpPower, h.AutoRotate = if combat then Config.BotSpeed else 0, if combat then 35 else 0, combat
 						end
 						slot.model = bot
 					else slot.model = nil end

@@ -106,7 +106,7 @@ local templateCount=0
 function players:CreateHumanoidModelFromDescriptionAsync() templateCount+=1; return character() end
 local run = {Heartbeat=signal(),IsStudio=function() return false end}
 local replicated,teams = Instance.new("ReplicatedStorage"),Instance.new("Teams")
-replicated.Shared={SessionRules="rules"}
+replicated.Shared={SessionRules="rules",Config="config"}
 local game = {CreatorId=85,GetService=function(_,name)
 	return ({Players=players,ReplicatedStorage=replicated,RunService=run,Teams=teams})[name]
 end}
@@ -130,15 +130,18 @@ end
 local accessory=Instance.new("Part")
 probe.DescendantAdded:Fire(accessory)
 assert(accessory.CollisionGroup=="Characters", "late-added parts must not push characters")
+local config = (function()
+-- CONFIG_MODULE_HERE
+end)()
 local movement = (function()
 	local game={GetService=function() return {Shared={Config="config"}} end}
-	local require=function() return {RunSpeed=22,WalkSpeed=10,CrouchSpeed=6,CrouchDepth=1.2} end
+	local require=function() return config end
 	local OverlapParams={new=function() return {} end}
 -- MOVEMENT_MODULE_HERE
 end)()
 local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision",Movement="movement"}}
 local require = function(name)
-	return ({rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
+	return ({config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
 local task = {
@@ -328,7 +331,7 @@ for _, s in capturedSlots.Red do
 	end
 end
 assert(rules.TeamSize==3 and blueBots==2 and redBots==3)
-tick(2.99)
+tick(.99)
 assert(state:GetAttribute("Phase")=="Freeze")
 movement.step(.1)
 assert(not admin.Character.HumanoidRootPart.Anchored and admin.Character:FindFirstChildOfClass("Humanoid").WalkSpeed==0)
@@ -336,7 +339,7 @@ tick(.02)
 assert(state:GetAttribute("Phase")=="Combat" and not admin:GetAttribute("SessionBlocked"))
 assert(not admin.Character:FindFirstChild("HumanoidRootPart").Anchored)
 assert(admin.Character:FindFirstChild("HumanoidRootPart").owner==admin, "freeze release restores client physics ownership")
-assert(admin.Character:FindFirstChildOfClass("Humanoid").WalkSpeed==22, "freeze release restores speed immediately")
+assert(admin.Character:FindFirstChildOfClass("Humanoid").WalkSpeed==19.8, "freeze release restores reduced speed immediately")
 assert(admin.Character:FindFirstChildOfClass("Humanoid").JumpPower==35 and admin.Character:FindFirstChildOfClass("Humanoid").AutoRotate)
 for _, s in capturedSlots.Red do
 	s.model:FindFirstChildOfClass("Humanoid").Health=42

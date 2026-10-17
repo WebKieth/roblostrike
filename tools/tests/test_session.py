@@ -18,10 +18,22 @@ class SessionTests(unittest.TestCase):
         fixture = fixture.replace('-- SESSION_MODULE_HERE', (ROOT / 'src/server/Session.luau').read_text())
         fixture = fixture.replace('-- COLLISION_MODULE_HERE', (ROOT / 'src/server/CharacterCollision.luau').read_text())
         fixture = fixture.replace('-- MOVEMENT_MODULE_HERE', (ROOT / 'src/server/Movement.luau').read_text())
+        fixture = fixture.replace('-- CONFIG_MODULE_HERE', (ROOT / 'src/shared/Config.luau').read_text())
         return fixture
 
     def test_real_round_and_roster_controller(self):
         self.run_luau(self.session_fixture())
+
+    def test_one_second_freeze_and_ten_percent_slower_movement(self):
+        config = (ROOT / 'src/shared/Config.luau').read_text()
+        for name, previous in (('RunSpeed', 22), ('WalkSpeed', 10),
+                               ('CrouchSpeed', 6), ('BotSpeed', 16)):
+            value = float(re.search(rf'{name} = ([\d.]+)', config)[1])
+            self.assertAlmostEqual(value, previous * 0.9)
+        rules = (ROOT / 'src/shared/SessionRules.luau').read_text()
+        self.assertRegex(rules, r'FreezeSeconds = 1,')
+        session = (ROOT / 'src/server/Session.luau').read_text()
+        self.assertEqual(session.count('then Config.BotSpeed else 0'), 2)
 
     def test_human_only_setup_and_no_disconnect_backfill(self):
         self.run_luau(self.session_fixture().replace('local scenario="default"', 'local scenario="no_bots"'))

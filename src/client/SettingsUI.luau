@@ -105,11 +105,6 @@ function Settings.start(player: Player)
 		if state == Enum.UserInputState.Begin and not native and not UserInputService:GetFocusedTextBox() then setOpen(not open) end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.ContextActionPriority.High.Value + 30, Enum.KeyCode.F10)
-	ContextActionService:BindActionAtPriority("RobostrikeSettingsMovement", function()
-		return if open or native then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
-	end, false, Enum.ContextActionPriority.High.Value + 30, Enum.PlayerActions.CharacterForward,
-		Enum.PlayerActions.CharacterBackward, Enum.PlayerActions.CharacterLeft, Enum.PlayerActions.CharacterRight,
-		Enum.PlayerActions.CharacterJump)
 	-- Roblox owns Escape/CoreGui; games cannot insert a custom settings tab there.
 	-- Show our panel when it closes, without replacing or breaking the system menu.
 	GuiService.MenuOpened:Connect(function()

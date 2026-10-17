@@ -13,7 +13,8 @@ return table.freeze({
 		Icon = "",
 		Procedural = true,
 		Size = Vector3.new(0.32, 0.35, 0.95),
-		Grip = CFrame.new(0, -0.25, 0.65) * CFrame.Angles(math.rad(-90), 0, 0),
+		-- GunModel's bore already points along -Z in the forward-held R6 hand.
+		Grip = CFrame.new(0, -0.25, 0.65),
 		View = CFrame.new(0.7, -0.72, -1.5) * CFrame.Angles(0, math.rad(12), 0),
 		ADS = CFrame.new(0, -0.28, -1.18),
 		SightHeight = 0.28,
@@ -38,7 +39,7 @@ return table.freeze({
 		AssetId = 0,
 		Icon = "",
 		Size = Vector3.new(0.34, 0.9, 1.35),
-		Grip = CFrame.new(0, -0.15, 0.35) * CFrame.Angles(math.rad(-90), 0, 0),
+		Grip = CFrame.new(0, -0.15, 0.35),
 		View = CFrame.new(0.65, -0.8, -1) * CFrame.Angles(0, math.rad(10), 0),
 		RightHand = Vector3.new(0, -0.4, 0.3),
 		Procedural = true,

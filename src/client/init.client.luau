@@ -17,6 +17,7 @@ local equip = remotes:WaitForChild("EquipWeapon") :: RemoteEvent
 local movement = remotes:WaitForChild("SetMovement") :: RemoteEvent
 local drop = remotes:WaitForChild("DropWeapon") :: RemoteEvent
 
+require(script.MovementInput).start(player)
 require(script.SettingsUI).start(player)
 require(script.FirstPersonVisibility).start(player)
 

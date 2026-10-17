@@ -53,6 +53,12 @@ class WeaponViewTests(unittest.TestCase):
             self.assertAlmostEqual(y + height, 0)
             self.assertLess(z, -0.5)
 
+    def test_world_firearms_do_not_rotate_the_forward_bore_up(self):
+        for slot in self.slots[:2]:
+            grip = re.search(r'Grip = ([^\n]+)', slot)[1]
+            self.assertNotIn('Angles', grip)
+            self.assertIn('Muzzle = Vector3.new(0, 0, -', slot)
+
     def test_firearms_use_local_models(self):
         self.assertIn('ModelName = "M4A1"', self.slots[0])
         self.assertIn('ModelName = "Glock 17"', self.slots[1])

@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[2]
 class ClientPresentationTests(unittest.TestCase):
     run_luau = test_combat.CombatTests.run_luau
 
+    def test_freeze_and_menus_reset_movement_controller(self):
+        fixture = (ROOT / 'tools/tests/fixtures/movement_input.luau').read_text()
+        source = (ROOT / 'src/client/MovementInput.luau').read_text()
+        self.run_luau(fixture.replace('-- MOVEMENT_INPUT_MODULE_HERE', source))
+
     def test_sound_settings_and_first_person_visibility(self):
         fixture = (ROOT / 'tools/tests/fixtures/client_settings.luau').read_text()
         for marker, path in (

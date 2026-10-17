@@ -89,12 +89,6 @@ function SessionHUD.start(player: Player)
 		if inputState == Enum.UserInputState.Begin then menu:FireServer(not player:GetAttribute("TeamMenuOpen")) end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.ContextActionPriority.High.Value + 10, Enum.KeyCode.M)
-	-- Block input while the server disables movement, without anchoring the rig.
-	ContextActionService:BindActionAtPriority("RobostrikeSessionFreeze", function()
-		return if Rules.blocked(player) then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
-	end, false, Enum.ContextActionPriority.High.Value + 9, Enum.PlayerActions.CharacterForward,
-		Enum.PlayerActions.CharacterBackward, Enum.PlayerActions.CharacterLeft, Enum.PlayerActions.CharacterRight,
-		Enum.PlayerActions.CharacterJump)
 
 	local function mute(instance: Instance)
 		if instance:IsA("Sound") and instance.Name == "Died" then

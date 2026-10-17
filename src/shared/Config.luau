@@ -4,9 +4,10 @@
 return table.freeze({
 	GameName = "Robostrike",
 	Version = "0.2.0",
-	RunSpeed = 22,
-	WalkSpeed = 10,
-	CrouchSpeed = 6,
+	RunSpeed = 19.8,
+	WalkSpeed = 9,
+	CrouchSpeed = 5.4,
+	BotSpeed = 14.4,
 	CrouchDepth = 0.9,
 	RespawnDelay = 3,
 	WeaponHUDDuration = 2,
