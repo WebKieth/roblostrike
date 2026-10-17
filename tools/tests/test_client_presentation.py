@@ -9,6 +9,19 @@ ROOT = Path(__file__).resolve().parents[2]
 class ClientPresentationTests(unittest.TestCase):
     run_luau = test_combat.CombatTests.run_luau
 
+    def test_procedural_character_movement_and_cleanup(self):
+        fixture = (ROOT / 'tools/tests/fixtures/character_animation.luau').read_text()
+        source = (ROOT / 'src/client/CharacterAnimation.luau').read_text()
+        self.run_luau(fixture.replace('-- ANIMATION_MODULE_HERE', source))
+
+    def test_mac_crouch_keys_and_observer_animation(self):
+        source = (ROOT / 'src/client/init.client.luau').read_text()
+        self.assertIn('Enum.KeyCode.C, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl)', source)
+        self.assertIn('crouching = next(crouchKeys) ~= nil', source)
+        self.assertIn('table.clear(crouchKeys)', source)
+        self.assertIn('Players.PlayerAdded:Connect(watchAnimations)', source)
+        self.assertIn('other.CharacterAdded:Connect(start)', source)
+
     def test_freeze_and_menus_reset_movement_controller(self):
         fixture = (ROOT / 'tools/tests/fixtures/movement_input.luau').read_text()
         source = (ROOT / 'src/client/MovementInput.luau').read_text()

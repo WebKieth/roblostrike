@@ -9,9 +9,10 @@ local PoliceSkin = require(script.Parent.PoliceSkin)
 local Loadout = require(script.Parent.Loadout)
 local CharacterCollision = require(script.Parent.CharacterCollision)
 local Movement = require(script.Parent.Movement)
+local Loot = require(script.Parent.Loot)
 local Session = {}
 
-function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
+function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Snapshot?) -> Model?)
 	local choose = Instance.new("RemoteEvent")
 	choose.Name, choose.Parent = "ChooseTeam", remotes
 	local menu = Instance.new("RemoteEvent")
@@ -205,6 +206,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		local token = generation
 		phase("Preparing")
 		clearModels()
+		Loot.reset()
 		if botsPerTeam > 0 and not template then
 			local description = PoliceSkin.description()
 			local ok, result = pcall(function()
@@ -231,7 +233,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 					if remainingBots == 0 then continue end
 					remainingBots -= 1
 				end
-				local model = if owner then spawnPlayer(owner, Rules.spawn(id, index)) else makeBot(id, index)
+				local model = if owner then spawnPlayer(owner, Rules.spawn(id, index), slot.saved) else makeBot(id, index)
 				if token ~= generation or slot.player ~= owner then
 					if model then model:Destroy() end
 					starting = false
@@ -249,6 +251,9 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			end
 		end
 		starting = false
+		for _, roster in slots do
+			for _, slot in roster do slot.saved = nil end
+		end
 		round += 1
 		state:SetAttribute("Round", round)
 		phase("Freeze", Rules.FreezeSeconds)
@@ -267,10 +272,11 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		state:SetAttribute("ServerName", nil)
 		phase("Browsing")
 		clearModels()
+		Loot.reset()
 		round = 0
 		for id, roster in slots do
 			state:SetAttribute(id .. "Wins", 0)
-			for _, slot in roster do slot.player = nil end
+			for _, slot in roster do slot.player = nil; slot.saved = nil end
 		end
 		for _, player in Players:GetPlayers() do
 			player.Team = nil
@@ -313,6 +319,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			for index, slot in roster do
 				if slot.player == player then
 					slot.player = nil
+					slot.saved = nil
 					local old = slot.model
 					local bots = 0
 					for _, other in roster do
@@ -375,7 +382,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 				round = 0
 				state:SetAttribute("Round", 0)
 				state:SetAttribute("Winner", nil)
-				for id in slots do state:SetAttribute(id .. "Wins", 0) end
+				for id, roster in slots do
+					state:SetAttribute(id .. "Wins", 0)
+					for _, slot in roster do slot.saved = nil end
+				end
 				table.clear(lastPose)
 			end
 			botsPerTeam = pendingBots
@@ -427,6 +437,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 				if slot.player == player then
 					if alive(slot.model) then (slot.model:FindFirstChildOfClass("Humanoid") :: Humanoid).Health = 0 end
 					slot.player = nil
+					slot.saved = nil
 				end
 			end
 		end
@@ -471,6 +482,11 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			for _, slot in roster do if alive(slot.model) then living[id] += 1 end end
 		end
 		if living.Red == 0 or living.Blue == 0 then
+			for _, roster in slots do
+				for _, slot in roster do
+					slot.saved = if slot.player and alive(slot.model) then Loadout.capture(slot.player) else nil
+				end
+			end
 			local winner = if living.Red == living.Blue then "Draw" elseif living.Red > 0 then "Red" else "Blue"
 			state:SetAttribute("Winner", winner)
 			if winner ~= "Draw" then state:SetAttribute(winner .. "Wins", state:GetAttribute(winner .. "Wins") + 1) end

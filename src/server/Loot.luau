@@ -9,10 +9,16 @@ local Weapons = require(ReplicatedStorage.Shared.Weapons)
 local Loadout = require(script.Parent.Loadout)
 
 local Loot = {}
+local resetRound: (() -> ())? = nil
+
+function Loot.reset()
+	if resetRound then resetRound() end
+end
+
 type Item = {
 	visual: Model, position: Vector3, velocity: Vector3?, tool: Tool?, helmet: boolean?,
 	spawnAt: Vector3?, readyAt: number?,
-	slot: number?,
+	slot: number?, armor: number?,
 }
 
 local function armorVisual(helmet: boolean): Model
@@ -46,7 +52,7 @@ function Loot.start(remotes: Folder)
 	local items: { Item } = {}
 	local lastDrop: { [Player]: number } = {}
 
-	local function add(position: Vector3, tool: Tool?, helmet: boolean?, spawnAt: Vector3?): Item
+	local function add(position: Vector3, tool: Tool?, helmet: boolean?, spawnAt: Vector3?, armor: number?): Item
 		local visual: Model
 		if tool then
 			tool.Parent = storage
@@ -80,22 +86,30 @@ function Loot.start(remotes: Folder)
 		visual:PivotTo(CFrame.new(position))
 		visual.Parent = folder
 		local item: Item = {visual = visual, position = position, tool = tool, helmet = helmet, spawnAt = spawnAt,
-			slot = if tool then tool:GetAttribute("WeaponSlot") else nil}
+			slot = if tool then tool:GetAttribute("WeaponSlot") else nil, armor = if tool then nil else armor or Survival.MaxArmor}
 		table.insert(items, item)
 		return item
 	end
 
-	-- Both tiled spawn rooms. Each pickup owns its own cooldown, not the room.
-	for _, z in { -10, -65 } do
-		for index, x in { -25, -18, -10, 3 } do
-			local position = Vector3.new(x, 0.6, z)
-			add(position, if index <= 2 then Loadout.create(index) else nil, index == 4, position)
-		end
-		for index, x in { -25, -18 } do
-			local position = Vector3.new(x, 0.6, z + (if z == -10 then 4 else -4))
-			add(position, Loadout.create(index + 5), nil, position)
+	resetRound = function()
+		-- Clear hidden cooldown visuals as well as dropped items and stored Tools.
+		for _, item in items do item.visual:Destroy() end
+		table.clear(items)
+		storage:ClearAllChildren()
+		table.clear(lastDrop)
+		-- Both tiled spawn rooms. Each pickup owns its own cooldown, not the room.
+		for _, z in { -10, -65 } do
+			for index, x in { -25, -18, -10, 3 } do
+				local position = Vector3.new(x, 0.6, z)
+				add(position, if index <= 2 then Loadout.create(index) else nil, index == 4, position)
+			end
+			for index, x in { -25, -18 } do
+				local position = Vector3.new(x, 0.6, z + (if z == -10 then 4 else -4))
+				add(position, Loadout.create(index + 5), nil, position)
+			end
 		end
 	end
+	Loot.reset()
 
 	drop.OnServerEvent:Connect(function(player: Player)
 		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then return end
@@ -173,6 +187,9 @@ function Loot.start(remotes: Folder)
 			end
 			if item.velocity then continue end -- No reclaiming a throw before it lands.
 			for _, player in Players:GetPlayers() do
+				local state = ReplicatedStorage:FindFirstChild("SessionState")
+				local phase = if state then state:GetAttribute("Phase") else nil
+				if not player:GetAttribute("InSession") or (phase ~= "Combat" and phase ~= "Freeze") then continue end
 				local character = player.Character
 				local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 				local root = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
@@ -200,9 +217,20 @@ function Loot.start(remotes: Folder)
 						if player:GetAttribute("SelectedSlot") == hotbarSlot then Loadout.equip(player, hotbarSlot) end
 					end
 				else
-					if (character:GetAttribute("Armor") or 0) >= Survival.MaxArmor then continue end
-					character:SetAttribute("Armor", Survival.MaxArmor)
-					character:SetAttribute("Helmet", item.helmet == true)
+					local armor = character:GetAttribute("Armor") or 0
+					local helmet = character:GetAttribute("Helmet") == true
+					local available = item.armor or Survival.MaxArmor
+					if item.helmet and not helmet then
+						-- Upgrading replaces the kit, leaving its actual remaining durability.
+						if armor > 0 then add(item.position + Vector3.new(1, 0, 0), nil, false, nil, armor) end
+						character:SetAttribute("Armor", available)
+						character:SetAttribute("Helmet", true)
+					else
+						local transfer = math.min(Survival.MaxArmor - armor, available)
+						if transfer <= 0 then continue end
+						character:SetAttribute("Armor", armor + transfer)
+						-- Refilling from a vest must not remove an already owned helmet.
+					end
 				end
 				item.visual.Parent = nil
 				if item.spawnAt then

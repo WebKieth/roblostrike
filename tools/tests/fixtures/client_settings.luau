@@ -26,8 +26,16 @@ end
 function methods:WaitForChild(name) return assert(self:FindFirstChild(name),name) end
 function methods:SetAttribute(name,value) self.attributes[name]=value end
 function methods:GetAttribute(name) return self.attributes[name] end
+function methods:GetAttributeChangedSignal(name)
+	self.attributeSignals = self.attributeSignals or {}
+	self.attributeSignals[name] = self.attributeSignals[name] or signal()
+	return self.attributeSignals[name]
+end
 function methods:Play() self.played=true end
-function methods:FireServer(...) self.last={...} end
+function methods:FireServer(...)
+	self.last={...}
+	self.sent=self.sent or {}; table.insert(self.sent,self.last)
+end
 function methods:IsDescendantOf(ancestor)
 	local parent=self.Parent; while parent do if parent==ancestor then return true end; parent=parent.Parent end; return false
 end
@@ -39,11 +47,16 @@ local Instance={new=function(class)
 	table.insert(created,obj); return obj
 end}
 local workspace=Instance.new("Workspace")
+local settingsReplicated=Instance.new("ReplicatedStorage")
+local settingsRemotes=Instance.new("Folder"); settingsRemotes.Name="Remotes"; settingsRemotes.Parent=settingsReplicated
+local settingsRemote=Instance.new("RemoteEvent"); settingsRemote.Name="PlayerSettings"; settingsRemote.Parent=settingsRemotes
+local settingsDelayed={}
+local task={delay=function(_, callback) table.insert(settingsDelayed, callback) end}
 local soundService=Instance.new("SoundService")
 local actions,renders={},{}
 local input={InputBegan=signal(),InputChanged=signal(),InputEnded=signal(),WindowFocusReleased=signal(),GetFocusedTextBox=function() return nil end}
 local guiService={MenuOpened=signal(),MenuClosed=signal()}
-local services={SoundService=soundService,UserInputService=input,GuiService=guiService,
+local services={ReplicatedStorage=settingsReplicated,SoundService=soundService,UserInputService=input,GuiService=guiService,
 	ContextActionService={BindActionAtPriority=function(_,name,callback) actions[name]=callback end},
 	RunService={BindToRenderStep=function(_,name,_,callback) renders[name]=callback end}}
 local game={GetService=function(_,name) return assert(services[name],name) end}
@@ -51,7 +64,8 @@ local Color3={fromRGB=function(...) return {...} end,new=function(...) return {.
 local UDim2={new=function(...) return {...} end,fromScale=function(x,y) return {X=x,Y=y} end,fromOffset=function(...) return {...} end}
 local UDim={new=function(...) return {...} end}
 local Vector2={new=function(...) return {...} end}
-local Enum={Font={GothamMedium=1},TextXAlignment={Left=1},UserInputState={Begin=1},
+local Enum={Font={GothamMedium=1},TextXAlignment={Left=1,Right=2},UserInputState={Begin=1},
+	AutomaticSize={Y=1},ScrollingDirection={Y=1},SortOrder={LayoutOrder=1},
 	UserInputType={MouseButton1=1,MouseMovement=2,Touch=3},ContextActionPriority={High={Value=100}},
 	ContextActionResult={Sink=1,Pass=2},KeyCode={F10=1,LeftAlt=2,RightAlt=3},MouseBehavior={Default=1},RenderPriority={Camera={Value=200}},
 	PlayerActions={CharacterForward=1,CharacterBackward=2,CharacterLeft=3,CharacterRight=4,CharacterJump=5}}
@@ -107,6 +121,25 @@ for _,item in gui:GetDescendants() do
 	if item.Text=="ВЕРНУТЬСЯ В ИГРУ" then close=item end
 end
 assert(track and close)
+local controlsTab, generalTab
+for _,item in gui:GetDescendants() do
+	if item.Text=="Управление" then controlsTab=item end
+	if item.Text=="Общие" then generalTab=item end
+end
+local general=assert(track.Parent)
+local controls=assert(general.Parent:FindFirstChild("Controls"))
+assert(general.Visible and not controls.Visible, "general settings shown by default")
+assert(controls.ClassName=="ScrollingFrame" and controls.AutomaticCanvasSize==Enum.AutomaticSize.Y)
+controlsTab.Activated:Fire()
+assert(controls.Visible and not general.Visible and player:GetAttribute("SettingsOpen"))
+local bindings=0
+for _,item in controls:GetDescendants() do
+	assert(item.ClassName~="TextButton" and item.ClassName~="TextBox", "bindings are read-only labels")
+	if item.ClassName=="TextLabel" then bindings+=1 end
+end
+assert(bindings>=40, "movement, weapons and menu bindings are listed")
+generalTab.Activated:Fire()
+assert(general.Visible and not controls.Visible, "return to audio and sensitivity")
 assert(sensitivityTrack and input.MouseDeltaSensitivity==1, "default mouse sensitivity")
 local sensitivityMouse={UserInputType=1,Position={X=100}}
 sensitivityTrack.InputBegan:Fire(sensitivityMouse)
@@ -188,6 +221,16 @@ player.CharacterRemoving:Fire(body)
 nextRoot.LocalTransparencyModifier=0; renders.RobostrikeHideBody()
 assert(nextRoot.LocalTransparencyModifier==1, "stale removal cannot clear current rig")
 assert(audio.get("Gunfire")==.45, "volume survives respawn")
+for _,callback in settingsDelayed do callback() end
+local savedSettings={}
+for _,message in settingsRemote.sent do savedSettings[message[1]]=message[2] end
+assert(savedSettings.Gunfire==.45 and savedSettings.Sensitivity, "slider changes sent to server in batches")
+player:SetAttribute("SettingGunfire",.35)
+player:GetAttributeChangedSignal("SettingGunfire"):Fire()
+assert(audio.get("Gunfire")==.35, "saved settings received asynchronously apply to mixer")
+player:SetAttribute("SettingSensitivity",1.3)
+player:GetAttributeChangedSignal("SettingSensitivity"):Fire()
+assert(input.MouseDeltaSensitivity==1.3, "loaded sensitivity applies to mouse")
 print("Client: sound mixing, slider input, Escape lifecycle, and first-person visibility OK")
 -- The real lobby UI must expose the server-checked bot budget and explicit start.
 local replicated=Instance.new("ReplicatedStorage")

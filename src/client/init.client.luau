@@ -40,6 +40,7 @@ task.spawn(function()
 end)
 
 local walkingKeys: { [Enum.KeyCode]: boolean } = {}
+local crouchKeys: { [Enum.KeyCode]: boolean } = {}
 local crouching = false
 local selectedSlot = player:GetAttribute("SelectedSlot") or 1
 local lastSelection = 0
@@ -50,6 +51,7 @@ end
 
 local function resetMovement()
 	table.clear(walkingKeys)
+	table.clear(crouchKeys)
 	crouching = false
 	sendMovement()
 end
@@ -86,15 +88,17 @@ ContextActionService:BindActionAtPriority("RobostrikeStance", function(_, state,
 	if pressed and UserInputService:GetFocusedTextBox() then
 		return Enum.ContextActionResult.Pass
 	end
-	if input.KeyCode == Enum.KeyCode.RightControl then
-		crouching = pressed
+	if input.KeyCode == Enum.KeyCode.C or input.KeyCode == Enum.KeyCode.LeftControl
+		or input.KeyCode == Enum.KeyCode.RightControl then
+		crouchKeys[input.KeyCode] = if pressed then true else nil
+		crouching = next(crouchKeys) ~= nil
 	else
 		walkingKeys[input.KeyCode] = if pressed then true else nil
 	end
 	sendMovement()
 	return Enum.ContextActionResult.Sink
 end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift,
-	Enum.KeyCode.RightControl)
+	Enum.KeyCode.C, Enum.KeyCode.LeftControl, Enum.KeyCode.RightControl)
 
 local slotKeys = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four }
 ContextActionService:BindAction("RobostrikeDrop", function(_, state)
@@ -151,6 +155,20 @@ local function onCharacter(character: Model)
 	end)
 end
 player.CharacterAdded:Connect(onCharacter)
+-- Procedural poses are local to each observer, including other human players.
+local function watchAnimations(other: Player)
+	if other == player then return end
+	local function start(character: Model)
+		character:WaitForChild("Humanoid")
+		character:WaitForChild("Torso")
+		character:WaitForChild("HumanoidRootPart")
+		if character.Parent then Animation.start(character) end
+	end
+	other.CharacterAdded:Connect(start)
+	if other.Character then task.spawn(start, other.Character) end
+end
+Players.PlayerAdded:Connect(watchAnimations)
+for _, other in Players:GetPlayers() do watchAnimations(other) end
 if player.Character then
 	task.spawn(onCharacter, player.Character)
 end

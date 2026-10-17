@@ -44,6 +44,7 @@ return table.freeze({
 		Grip = CFrame.new(0, -0.15, 0.35),
 		View = CFrame.new(0.65, -0.8, -1) * CFrame.Angles(0, math.rad(10), 0),
 		RightHand = Vector3.new(0, -0.4, 0.3),
+		LeftHand = Vector3.new(-0.2, -0.4, 0.3),
 		Procedural = true,
 		ADS = CFrame.new(0, -0.24, -0.9),
 		SightHeight = 0.24,

@@ -19,6 +19,7 @@ local CharacterCollision = require(script.CharacterCollision)
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
+require(script.PlayerSettings).start(remotes)
 local equip = Instance.new("RemoteEvent")
 equip.Name = "EquipWeapon"
 equip.Parent = remotes
@@ -61,7 +62,7 @@ local spawning: { [Player]: boolean } = {}
 local lastEquip: { [Player]: number } = {}
 local pendingEquip: { [Player]: number } = {}
 
-local function spawnCharacter(player: Player, spawnAt: CFrame): Model?
+local function spawnCharacter(player: Player, spawnAt: CFrame, saved: Loadout.Snapshot?): Model?
 	if spawning[player] or player.Parent ~= Players then
 		return
 	end
@@ -121,7 +122,7 @@ local function spawnCharacter(player: Player, spawnAt: CFrame): Model?
 	root.Anchored = false
 	root:SetNetworkOwner(player)
 	Loadout.give(player)
-	Loadout.equip(player, 1)
+	if saved then Loadout.restore(player, saved) else Loadout.equip(player, 1) end
 	spawning[player] = nil
 	humanoid.Died:Once(function()
 		movement.remove(player)

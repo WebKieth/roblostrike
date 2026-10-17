@@ -118,6 +118,13 @@ local loadout = {create=function()
 	local tool=Instance.new("Tool"); tool:SetAttribute("WeaponSlot",1); tool:SetAttribute("Ammo",30); tool:SetAttribute("ReserveAmmo",90)
 	return tool
 end,find=function(player) return player.Character:FindFirstChildOfClass("Tool") end}
+function loadout.capture(player)
+	local model = player.Character
+	local tool = model:FindFirstChildOfClass("Tool")
+	return {armor=model:GetAttribute("Armor"),helmet=model:GetAttribute("Helmet"),ammo=tool:GetAttribute("Ammo"),reserve=tool:GetAttribute("ReserveAmmo")}
+end
+local lootResets = 0
+local loot = {reset=function() lootResets += 1 end}
 local skin = {description=function() return Instance.new("HumanoidDescription") end,apply=function() end}
 local collision = (function()
 -- COLLISION_MODULE_HERE
@@ -144,9 +151,9 @@ local directory = {start=function(_, _, created, joined)
 	createSession, joinSession = created, joined
 	return {added=function() end, close=function() end}
 end}
-local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision",Movement="movement",ServerDirectory="directory"}}
+local script = {Parent={PoliceSkin="skin",Loadout="loadout",Loot="loot",Bots="bots",CharacterCollision="collision",Movement="movement",ServerDirectory="directory"}}
 local require = function(name)
-	return ({directory=directory,config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
+	return ({loot=loot,directory=directory,config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
 local task = {
@@ -167,7 +174,7 @@ end
 local friend=add(100)
 local spawnCount=0
 local failNextSpawn=false
-session.start(remotes,function(player,frame)
+session.start(remotes,function(player,frame,saved)
 	if failNextSpawn then failNextSpawn=false; return nil end
 	spawnCount+=1
 	local model=character(); model.Name=player.Name; model:PivotTo(frame)
@@ -177,6 +184,11 @@ session.start(remotes,function(player,frame)
 	model.HumanoidRootPart:SetNetworkOwner(player)
 	movement.add(player,model)
 	loadout.create().Parent=model
+	if saved then
+		model:SetAttribute("Armor",saved.armor); model:SetAttribute("Helmet",saved.helmet)
+		local tool=model:FindFirstChildOfClass("Tool")
+		tool:SetAttribute("Ammo",saved.ammo); tool:SetAttribute("ReserveAmmo",saved.reserve)
+	end
 	return model
 end)
 local state=replicated:FindFirstChild("SessionState")
@@ -374,11 +386,19 @@ assert(not before:FindFirstChild("HumanoidRootPart").Anchored)
 assert(before:FindFirstChild("HumanoidRootPart").owner==friend, "menu release also restores ownership")
 tick(.6); menu:Fire(friend,true); choose:Fire(friend,"Red")
 assert(beforeHumanoid.Health==0 and spawnCount==2, "same-team selection kills, never respawns")
+admin.Character:SetAttribute("Armor",40)
+admin.Character:SetAttribute("Helmet",true)
+admin.Character:FindFirstChildOfClass("Tool"):SetAttribute("Ammo",3)
+admin.Character:FindFirstChildOfClass("Tool"):SetAttribute("ReserveAmmo",12)
+local resetsBefore = lootResets
 for _, s in capturedSlots.Red do if s.model then s.model:FindFirstChildOfClass("Humanoid").Health=0 end end
 tick(.1)
 assert(state:GetAttribute("Phase")=="Intermission" and state:GetAttribute("BlueWins")==1)
 tick(4.1)
 assert(state:GetAttribute("Phase")=="Freeze" and state:GetAttribute("Round")==2)
+assert(lootResets==resetsBefore+1, "new round clears old loot")
+assert(admin.Character:GetAttribute("Armor")==40 and admin.Character:GetAttribute("Helmet"), "survivor keeps worn armor")
+assert(admin.Character:FindFirstChildOfClass("Tool"):GetAttribute("Ammo")==3 and admin.Character:FindFirstChildOfClass("Tool"):GetAttribute("ReserveAmmo")==12, "survivor keeps ammo")
 assert(friend.Character~=before and friend.Character:FindFirstChildOfClass("Humanoid").Health==100)
 tick(3.1)
 for _, s in capturedSlots.Red do if not s.player then s.model:FindFirstChildOfClass("Humanoid").Health=0 end end

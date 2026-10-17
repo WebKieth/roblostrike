@@ -27,6 +27,7 @@ end
 local methods = {}
 function methods:IsA(class) return self.ClassName==class or (class=="BasePart" and self.ClassName=="Part") end
 function methods:GetChildren() return table.clone(self.children) end
+function methods:ClearAllChildren() for _, child in self:GetChildren() do child:Destroy() end end
 function methods:GetDescendants()
 	local all = {}
 	for _,child in self.children do
@@ -82,6 +83,7 @@ local humanoid = Instance.new("Humanoid")
 humanoid.Health=100
 humanoid.Parent=character
 player.Character=character
+player:SetAttribute("InSession", true)
 local players = {GetPlayers=function() return {player} end,PlayerRemoving=signal()}
 local storage = Instance.new("Folder")
 local wall: number? = nil
@@ -142,9 +144,12 @@ function loadout.findHotbar(_,slot)
 		end
 	end
 end
+local state = Instance.new("Folder")
+state:SetAttribute("Phase", "Combat")
+local replicated = {Shared={Survival="survival",Weapons="weapons"}, FindFirstChild=function() return state end}
 local game = {GetService=function(_,name)
 	if name=="Players" then return players end
-	if name=="ReplicatedStorage" then return {Shared={Survival="survival",Weapons="weapons"}} end
+	if name=="ReplicatedStorage" then return replicated end
 	if name=="RunService" then return {Heartbeat=heartbeat} end
 	return storage
 end}
@@ -167,10 +172,13 @@ step(.1)
 assert(count()==11, "full armor leaves loot untouched")
 root.Position=V(3,3.1,-10)
 step(.1)
-assert(count()==11 and not character:GetAttribute("Helmet"), "no upgrade pickup with full armor")
-character:SetAttribute("Armor",80)
+assert(count()==11 and character:GetAttribute("Helmet"), "full vest upgrades to helmet kit and drops old vest")
+local oldVest = folder:GetChildren()[#folder:GetChildren()]
+assert(oldVest.Name == "Бронежилет")
+character:SetAttribute("Armor",20)
+root.Position=V(4,3.1,-10)
 step(.1)
-assert(count()==10 and character:GetAttribute("Helmet"))
+assert(count()==10 and character:GetAttribute("Armor")==100 and character:GetAttribute("Helmet"), "old vest refills armor without removing helmet")
 root.Position=V(100,3.1,100)
 step(59.71)
 assert(count()==11, "first armor respawns after its own 60 seconds")
@@ -231,4 +239,25 @@ assert(count()==before and not loadout.find(player,7), "only one primary can be 
 ak:Destroy()
 step(.1)
 assert(loadout.find(player,7), "M249 available in the room")
+local carried = loadout.find(player,7)
+Loot.reset()
+assert(count()==12 and loadout.find(player,7)==carried and carried.Parent==character, "round reset restores pads without destroying carried tools")
+root.Position=V(-10,3.1,-10)
+character:SetAttribute("Armor",40)
+state:SetAttribute("Phase", "Intermission")
+step(.1)
+assert(character:GetAttribute("Armor")==40 and count()==12, "intermission cannot mutate saved equipment")
+state:SetAttribute("Phase", "Combat")
+step(.1)
+assert(character:GetAttribute("Armor")==100 and character:GetAttribute("Helmet"), "worn armor refills and keeps helmet")
+root.Position=V(100,3.1,100)
+Loot.reset()
+character:SetAttribute("Armor",40); character:SetAttribute("Helmet",false)
+root.Position=V(3,3.1,-10)
+step(.1)
+assert(character:GetAttribute("Armor")==100 and character:GetAttribute("Helmet"), "worn vest is replaced by helmet kit")
+character:SetAttribute("Armor",20)
+root.Position=V(4,3.1,-10)
+step(.1)
+assert(character:GetAttribute("Armor")==60 and character:GetAttribute("Helmet"), "dropped vest contributes only its remaining 40 armor")
 print("Loot: auto pickup, independent cooldowns, preserved ammo, arc, wall and reclaim OK")

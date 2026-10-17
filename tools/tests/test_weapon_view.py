@@ -77,7 +77,8 @@ class WeaponViewTests(unittest.TestCase):
         for slot in self.slots:
             self.assertIn("RightHand = Vector3.new(", slot)
         self.assertIn("LeftHand = Vector3.new(", self.slots[0])
-        self.assertTrue(all("LeftHand =" not in slot for slot in self.slots[1:5]))
+        self.assertIn("LeftHand = Vector3.new(", self.slots[1])  # Two-handed pistol grip.
+        self.assertTrue(all("LeftHand =" not in slot for slot in self.slots[2:5]))
         for slot in self.slots[5:]:
             self.assertIn("LeftHand =", slot)
             self.assertIn("HotbarSlot = 1", slot)
