@@ -12,5 +12,5 @@ return table.freeze({
 	WeaponHUDDuration = 2,
 	-- Blue-tiled room: floor Y=0, underside of ceiling Y=10.
 	-- This is the HumanoidRootPart position, NOT a SpawnLocation surface.
-	SpawnCFrame = CFrame.new(-12.3125, 3.1, -9.8125) * CFrame.Angles(0, math.pi, 0),
+	SpawnCFrame = CFrame.new(-24, 3.1, 4) * CFrame.Angles(0, math.pi, 0),
 })

@@ -14,6 +14,7 @@ local movement = require(script.Movement)
 local PoliceSkin = require(script.PoliceSkin)
 local Survival = require(ReplicatedStorage.Shared.Survival)
 local SessionRules = require(ReplicatedStorage.Shared.SessionRules)
+local CharacterCollision = require(script.CharacterCollision)
 
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
@@ -93,11 +94,7 @@ local function spawnCharacter(player: Player, spawnAt: CFrame): Model?
 	root.Anchored = true
 	-- Exact root placement BEFORE entering Workspace; no MoveTo/ceiling raycasts.
 	character:PivotTo(spawnAt * root.CFrame:Inverse() * character:GetPivot())
-	for _, descendant in character:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			descendant.CollisionGroup = "Characters"
-		end
-	end
+	CharacterCollision.apply(character)
 	local animator = humanoid:FindFirstChildOfClass("Animator")
 	if not animator then
 		Instance.new("Animator", humanoid)

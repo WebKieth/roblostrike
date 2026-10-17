@@ -6,6 +6,7 @@ local Teams = game:GetService("Teams")
 local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local PoliceSkin = require(script.Parent.PoliceSkin)
 local Loadout = require(script.Parent.Loadout)
+local CharacterCollision = require(script.Parent.CharacterCollision)
 local Session = {}
 
 function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
@@ -151,9 +152,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		h.WalkSpeed, h.JumpPower = 16, 35
 		h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		if not h:FindFirstChildOfClass("Animator") then Instance.new("Animator", h) end
-		for _, part in model:GetDescendants() do
-			if part:IsA("BasePart") then part.CollisionGroup = "Characters" end
-		end
+		CharacterCollision.apply(model)
 		model:SetAttribute("Armor", 0)
 		model:SetAttribute("Helmet", false)
 		decorate(model, id, index, true)

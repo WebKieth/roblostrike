@@ -14,6 +14,34 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 		local h = if model then model:FindFirstChildOfClass("Humanoid") else nil
 		return model ~= nil and model.Parent ~= nil and h ~= nil and h.Health > 0
 	end
+	local function move(model: Model, humanoid: Humanoid, root: BasePart, destination: Vector3, roster: any)
+		local direction = Vector3.new(destination.X - root.Position.X, 0, destination.Z - root.Position.Z)
+		for _, ally in roster do
+			if ally.model == model or not living(ally.model) then continue end
+			local other = ally.model:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not other then continue end
+			local away = Vector3.new(root.Position.X - other.Position.X, 0, root.Position.Z - other.Position.Z)
+			local radius = if ally.player then 6 else 4
+			if away.Magnitude >= radius then continue end
+			-- Yield to humans and spread out without applying forces or teleporting.
+			if away.Magnitude > 0.1 and away.Magnitude < radius - 1 then
+				local step = away.Unit * (radius - away.Magnitude)
+				local filter = RaycastParams.new()
+				filter.FilterDescendantsInstances = { model, ally.model }
+				filter.RespectCanCollide = true
+				filter.CollisionGroup = "Characters"
+				if not workspace:Raycast(root.Position, step * 2, filter) then
+					humanoid:MoveTo(root.Position + step)
+					return
+				end
+			end
+			if direction:Dot(away) < 0 or away.Magnitude <= 0.1 then
+				humanoid:MoveTo(root.Position)
+				return
+			end
+		end
+		humanoid:MoveTo(destination)
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		elapsed += dt
 		if elapsed < 0.1 then return end
@@ -57,7 +85,7 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 					h.AutoRotate = false
 					local flat = Vector3.new(targetRoot.Position.X, root.Position.Y, targetRoot.Position.Z)
 					if (flat - root.Position).Magnitude > 0.1 then root.CFrame = CFrame.lookAt(root.Position, flat) end
-					h:MoveTo(if distance > 35 then targetRoot.Position else root.Position)
+					move(model, h, root, if distance > 35 then targetRoot.Position else root.Position, roster)
 					if now >= brain.nextShot then
 						local tool = model:FindFirstChildOfClass("Tool")
 						if not tool then continue end
@@ -95,8 +123,8 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 					if waypoint then
 						if (root.Position - waypoint.Position).Magnitude < 3 then brain.waypoint += 1 end
 						h.Jump = waypoint.Action == Enum.PathWaypointAction.Jump
-						h:MoveTo(waypoint.Position)
-					else h:MoveTo(targetRoot.Position) end
+						move(model, h, root, waypoint.Position, roster)
+					else move(model, h, root, targetRoot.Position, roster) end
 				end
 			end
 		end

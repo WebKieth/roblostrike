@@ -16,7 +16,7 @@ vector.__sub = function(a,b) return V(a.X-b.X,a.Y-b.Y,a.Z-b.Z) end
 local Vector3 = {new=V,zero=V(0,0,0)}
 local cf = {__mul=function(a) return a end}
 cf.__index = {Inverse=function(self) return self end}
-local CFrame = {new=function(x,y,z) return setmetatable({Position=V(x,y,z)}, cf) end,Angles=function() return {} end}
+local CFrame = {new=function(x,y,z) return setmetatable({Position=if type(x)=="table" then x else V(x,y,z)}, cf) end,Angles=function() return {} end}
 local Color3 = {fromRGB=function(...) return {...} end}
 local BrickColor = {new=function(v) return v end}
 local UDim2 = {fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end}
@@ -76,6 +76,7 @@ function methods:FireAllClients(...) self.last={...} end
 function methods:FireClient(recipient, ...) self.recipient=recipient; self.last={...} end
 local function character()
 	local model = Instance.new("Model")
+	model.DescendantAdded=signal()
 	local h = Instance.new("Humanoid"); h.Parent=model
 	for _, name in {"HumanoidRootPart","Head","Left Arm","Right Arm"} do
 		local part = Instance.new("Part"); part.Name,part.Parent=name,model; part.CFrame=CFrame.new(0,0,0)
@@ -107,9 +108,20 @@ local loadout = {create=function()
 	return tool
 end,find=function(player) return player.Character:FindFirstChildOfClass("Tool") end}
 local skin = {description=function() return Instance.new("HumanoidDescription") end,apply=function() end}
-local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots"}}
+local collision = (function()
+-- COLLISION_MODULE_HERE
+end)()
+local probe=character()
+collision.apply(probe)
+for _, part in probe:GetDescendants() do
+	if part:IsA("BasePart") then assert(part.CollisionGroup=="Characters") end
+end
+local accessory=Instance.new("Part")
+probe.DescendantAdded:Fire(accessory)
+assert(accessory.CollisionGroup=="Characters", "late-added parts must not push characters")
+local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision"}}
 local require = function(name)
-	return ({rules=rules,skin=skin,loadout=loadout,bots={start=function(slots) capturedSlots=slots end}})[name]
+	return ({rules=rules,skin=skin,loadout=loadout,collision=collision,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
 local task = {
@@ -152,7 +164,7 @@ assert(admin.Character:FindFirstChild("PlayerNickname",true))
 local blueBots,redBots=0,0
 for _, s in capturedSlots.Blue do if not s.player then blueBots+=1; assert(not s.model:FindFirstChild("PlayerNickname",true)) end end
 for _, s in capturedSlots.Red do if not s.player then redBots+=1 end end
-assert(blueBots==4 and redBots==5)
+assert(rules.TeamSize==3 and blueBots==2 and redBots==3)
 tick(2.99)
 assert(state:GetAttribute("Phase")=="Freeze")
 tick(.02)
@@ -187,7 +199,7 @@ local late=add(101)
 local previousSpawns=spawnCount
 choose:Fire(late,"Red")
 assert(not late.Character and spawnCount==previousSpawns, "joining a dead bot cannot resurrect")
-for id=102,104 do choose:Fire(add(id),"Red") end
+choose:Fire(add(102),"Red")
 local excess=add(105); choose:Fire(excess,"Red")
 assert(excess:GetAttribute("TeamId")==nil and excess:GetAttribute("TeamMenuError"))
 tick(.1)
@@ -211,4 +223,4 @@ assert(replacement and replacement:FindFirstChildOfClass("Humanoid").Health==37,
 players.PlayerRemoving:Fire(admin)
 assert(state:GetAttribute("Phase")=="WaitingAdmin" and state:GetAttribute("BlueWins")==0)
 assert(not friend:GetAttribute("TeamId"))
-print("Session: admin gate, 5v5, freeze, takeover, menus, elimination, draw and shutdown OK")
+print("Session: admin gate, 3v3, collision, freeze, takeover, menus, elimination, draw and shutdown OK")
