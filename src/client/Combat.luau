@@ -14,6 +14,7 @@ local Effects = require(script.Parent.ShotEffects)
 local Combat = {}
 
 function Combat.start(player: Player)
+	local hitFeedback = require(script.Parent.HitFeedback).start(player)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local fire = remotes:WaitForChild("FireShot") :: RemoteEvent
 	local reload = remotes:WaitForChild("ReloadWeapon") :: RemoteEvent
@@ -171,11 +172,15 @@ function Combat.start(player: Player)
 		state.ADS += ((if active and aiming and tool and not tool:GetAttribute("Reloading") then 1 else 0) - state.ADS) * (1 - math.exp(-dt * 16))
 		camera.FieldOfView = defaultFov + (55 - defaultFov) * state.ADS
 		crosshair.Visible, status.Visible = active, active
+		local flinchLift, aimDrop = hitFeedback()
 		if not active or not tool or not humanoid or not head then
-			state.Aim = camera.CFrame
+			state.Aim = camera.CFrame * CFrame.Angles(-aimDrop, 0, 0)
+			cameraRotation = CFrame.Angles(flinchLift, 0, 0)
+			recoilCamera = camera
+			camera.CFrame *= cameraRotation
 			-- Freeze blocks firing, not the camera-local presentation. Never leave
 			-- hands pointing at identity/last round's world-space weapon frame.
-			state.WeaponFrame = if definition and definition.FireInterval then camera.CFrame * definition.View else nil
+			state.WeaponFrame = if definition and definition.FireInterval then state.Aim * definition.View else nil
 			state.Muzzle = nil
 			held, aiming, queued = false, false, false
 			if humanoid and humanoid.Health > 0 and not tool then
@@ -212,9 +217,12 @@ function Combat.start(player: Player)
 		-- Scale the whole current offset, not just the next impulse: entering
 		-- ADS halves even an already accumulated burst; crouching adds x0.8.
 		local offset = (recoil + Ballistics.sway(phase, movement, 0) + dispersion * dispersionWeight) * spreadScale
+		-- Incoming head trauma is independent of ADS, crouch and shot cadence.
+		-- It changes the actual gun/ballistic frame, not just the HUD position.
+		offset -= Vector2.new(0, aimDrop)
 		local basePitch, yaw, roll = camera.CFrame:ToOrientation()
 		local pitch, cameraLift = Ballistics.elevation(basePitch, offset.Y)
-		cameraRotation = CFrame.Angles(cameraLift, 0, 0)
+		cameraRotation = CFrame.Angles(cameraLift + math.min(flinchLift, math.pi / 2 - basePitch - cameraLift), 0, 0)
 		recoilCamera = camera
 		camera.CFrame *= cameraRotation
 		state.Aim = CFrame.new(camera.CFrame.Position) * CFrame.fromOrientation(pitch, yaw - offset.X, roll)

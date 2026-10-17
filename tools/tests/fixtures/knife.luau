@@ -57,6 +57,7 @@ local tool = {GetAttribute=function() return 1 end,AncestryChanged=signal()}
 local alive = {Health=100}
 local head = {Position=V(0,0,0),Size=V(2,1,1),CFrame=frame}
 local character = {
+	GetPivot=function() return {Position=head.Position} end,
 	GetAttribute=function() return nil end,
 	FindFirstChildOfClass=function(_,name) return if name == "Tool" then tool else alive end,
 	FindFirstChild=function() return head end,

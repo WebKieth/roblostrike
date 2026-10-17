@@ -61,6 +61,7 @@ local tool = {
 local humanoid = {Health=100}
 local head = { Position=V(0,0,0) }
 local character = {
+	GetPivot = function() return { Position = head.Position } end,
 	GetAttribute = function(_, key) return if key == "TeamId" then "Blue" else nil end,
 	FindFirstChildOfClass = function(_, class) return if class == "Tool" then tool else humanoid end,
 	FindFirstChild = function(_, name) return if name == "Head" then head else nil end,
@@ -78,6 +79,10 @@ local victimModel = {
 	GetAttribute = function(_, name) return attributes[name] end,
 	SetAttribute = function(_, name, value) attributes[name] = value end,
 }
+local victimPlayer = { Character = victimModel }
+players.GetPlayerFromCharacter = function(_, model)
+	return if model == character then player elseif model == victimModel then victimPlayer else nil
+end
 victim.Parent = victimModel
 local targetPart = { Name="Torso", Parent=victimModel, IsA=function() return false end }
 local hit = {Position=V(0,0,-50), Normal=V(0,0,1), Material="Metal", Instance=targetPart}
@@ -100,6 +105,8 @@ local direction = V(0,0,-1)
 fire(player, V(0,0,0), direction)
 assert(ammo.Ammo == 29 and victim.Health == 30 and effect.count == 1)
 assert(events[4].recipient == player, "damage feedback goes only to the attacker")
+assert(events[5].recipient == victimPlayer, "incoming damage goes only to victim")
+assert(events[5].last[1] == victimModel and events[5].last[2] == head.Position and events[5].last[3] == false)
 clock += .03
 fire(player, V(0,0,0), direction)
 assert(ammo.Ammo == 29, "server must reject excess RPM")
@@ -160,6 +167,7 @@ assert(ammo.Ammo == 7 and ammo.ReserveAmmo == 0, "last reserve can be partial")
 reload(player)
 assert(not ammo.Reloading, "no infinite reloads")
 attributes.Immortal = true
+local incomingBefore = events[5].count
 victim.Health = 100
 clock += .2
 fire(player, V(0,0,0), direction)
@@ -169,6 +177,7 @@ targetPart.Name = "Head"
 clock += .2
 fire(player, V(0,0,0), direction)
 assert(victim.Health == 100 and events[4].last[2] == 90, "Glock uses reference damage times .6")
+assert(events[5].count == incomingBefore, "immortality must not create incoming damage")
 -- Server freeze/menu gates and friendly fire protect armor as well as HP.
 local beforeAmmo, beforeFeedback = ammo.Ammo, events[4].count
 playerAttributes.SessionBlocked = true
@@ -186,7 +195,9 @@ attributes.TeamId, attributes.Armor, attributes.Helmet = "Blue", 100, true
 victim.Health, attributes.Immortal = 100, false
 Combat.damage(hit, 1, events[4], character)
 assert(victim.Health == 100 and attributes.Armor == 100 and events[4].count == beforeFeedback)
+assert(events[5].count == incomingBefore, "friendly fire must not kick victim camera")
 attributes.TeamId = "Red"
 Combat.damage(hit, 1, events[4], character)
 assert(victim.Health == 25 and attributes.Armor == 80)
+assert(events[5].last[3] == true and events[5].count == incomingBefore + 1, "helmet headshot still kicks camera")
 print("Combat server: damage, ammo, rate, malformed input, cover and reload OK")

@@ -58,7 +58,10 @@ local session = (function()
 end)()
 local script = {Parent={Combat="combat"}}
 local require = function(name)
-	if name == "combat" then return {feedback=function(event, _, position, damage) event:FireClient("attacker", position, damage) end} end
+	if name == "combat" then return {
+		feedback=function(event, _, position, damage) event:FireClient("attacker", position, damage) end,
+		incoming=function(_, _, headshot) assert(not headshot, "blast is not a headshot") end,
+	} end
 	return if name=="session" then session elseif name=="rules" then rules else definitions
 end
 local attributes = {Ammo=3,WeaponSlot=1}

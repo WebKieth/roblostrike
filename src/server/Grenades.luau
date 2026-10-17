@@ -65,7 +65,9 @@ function Grenades.start(remotes: Folder)
 		end
 		for _, victim in victims do
 			-- Grenade HP damage is linear and does not use firearm zone/armor rules.
+			local health = victim.Humanoid.Health
 			if not victim.Body:GetAttribute("Immortal") then victim.Humanoid:TakeDamage(victim.Damage) end
+			if victim.Humanoid.Health < health then Combat.incoming(victim.Body, position, false) end
 			Combat.feedback(damageNumbers, owner, victim.Position, victim.Damage)
 		end
 		effects:FireAllClients(position)

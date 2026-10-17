@@ -34,7 +34,7 @@ class CombatTests(unittest.TestCase):
         self.assertIn('fire:FireServer(muzzle - head.Position, direction)', client)
         self.assertIn('workspace:Raycast(muzzle, direction * definition.Range, params)', server)
         self.assertIn('weaponFrame = combat.WeaponFrame or weaponFrame', view)
-        self.assertIn('state.WeaponFrame = if definition and definition.FireInterval then camera.CFrame * definition.View else nil', client)
+        self.assertIn('state.WeaponFrame = if definition and definition.FireInterval then state.Aim * definition.View else nil', client)
         self.assertIn('WeaponFrame = nil :: CFrame?', client)
         self.assertNotIn('CFrame.lookAt(sightOrigin, target', view)
         self.assertNotIn('muzzle = state.Muzzle or muzzle', client)

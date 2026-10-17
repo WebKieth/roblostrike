@@ -7,6 +7,12 @@ local Ballistics = require(ReplicatedStorage.Shared.Ballistics)
 local Survival = require(ReplicatedStorage.Shared.Survival)
 local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local Combat = {}
+local damageTaken: RemoteEvent? = nil
+
+function Combat.incoming(body: Model, origin: Vector3, headshot: boolean)
+	local player = Players:GetPlayerFromCharacter(body)
+	if player and damageTaken then damageTaken:FireClient(player, body, origin, headshot) end
+end
 
 function Combat.feedback(event: RemoteEvent, source: Model?, position: Vector3, damage: number)
 	-- Damage numbers belong to the attacker, never to other clients or bot AI.
@@ -32,7 +38,12 @@ function Combat.damage(hit: RaycastResult, multiplier: number?, damageNumbers: R
 			body:GetAttribute("Armor") or 0, body:GetAttribute("Helmet") == true, multiplier)
 		body:SetAttribute("Armor", armor)
 		if armor == 0 then body:SetAttribute("Helmet", false) end
+		local health = victim.Health
 		if not body:GetAttribute("Immortal") then victim:TakeDamage(damage) end
+		if victim.Health < health then
+			Combat.incoming(body, if source then source:GetPivot().Position else hit.Position,
+				Survival.zone(hit.Instance.Name) == "Head")
+		end
 		local head = body:FindFirstChild("Head") :: BasePart?
 		Combat.feedback(damageNumbers, source, if head then head.Position else hit.Position, damage)
 	end
@@ -55,6 +66,7 @@ function Combat.start(remotes: Folder)
 	local reload = remote("ReloadWeapon")
 	local effects = remote("ShotEffect")
 	local damageNumbers = remote("DamageNumber")
+	damageTaken = remote("DamageTaken")
 	local nextShot: { [Player]: number } = {}
 	local lastRequest: { [Player]: number } = {}
 	local reloadTokens: { [Tool]: number } = setmetatable({}, { __mode = "k" }) :: any

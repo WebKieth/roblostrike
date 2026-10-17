@@ -3,6 +3,7 @@
 .env.*
 .tools/
 build/
+outputs/
 assets/source/
 __pycache__/
 *.rbxl.lock
