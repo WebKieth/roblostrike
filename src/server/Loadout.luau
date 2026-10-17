@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
+local GunModel = require(ReplicatedStorage.Shared.GunModel)
 
 local Loadout = {}
 
@@ -22,10 +23,14 @@ function Loadout.give(player: Player)
 		tool.ToolTip = definition.Name
 		tool.TextureId = definition.Icon
 		tool.CanBeDropped = false
-		tool.Enabled = false -- Visual loadout only; no firing/throwing yet.
+		tool.Enabled = false -- Input is handled by Combat, not stock Tool activation.
 		tool.Grip = definition.Grip
 		tool:SetAttribute("WeaponSlot", slot)
 		tool:SetAttribute("CatalogAssetId", definition.AssetId)
+		if definition.Magazine then
+			tool:SetAttribute("Ammo", definition.Magazine)
+			tool:SetAttribute("Reloading", false)
+		end
 
 		local handle = Instance.new("Part")
 		handle.Name = "Handle"
@@ -35,12 +40,16 @@ function Loadout.give(player: Player)
 		handle.CanQuery = false
 		handle.Massless = true
 		handle.Parent = tool
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.FileMesh
-		mesh.MeshId = definition.MeshId
-		mesh.TextureId = definition.TextureId
-		mesh.Scale = definition.Scale
-		mesh.Parent = handle
+		if definition.Procedural then
+			GunModel.build(handle, slot, false)
+		else
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.FileMesh
+			mesh.MeshId = definition.MeshId
+			mesh.TextureId = definition.TextureId
+			mesh.Scale = definition.Scale
+			mesh.Parent = handle
+		end
 		tool.Parent = backpack
 	end
 end

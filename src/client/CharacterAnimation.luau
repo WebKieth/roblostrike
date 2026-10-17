@@ -15,17 +15,19 @@ function CharacterAnimation.start(character: Model)
 		walk = "rbxassetid://180426354",
 		jump = "rbxassetid://125750702",
 		fall = "rbxassetid://180436148",
+		tool = "rbxassetid://182393478",
 	}
 	for name, id in ids do
 		local animation = Instance.new("Animation")
 		animation.AnimationId = id
 		local track = animator:LoadAnimation(animation)
-		track.Priority = Enum.AnimationPriority.Movement
+		track.Priority = if name == "tool" then Enum.AnimationPriority.Action else Enum.AnimationPriority.Movement
 		track.Looped = name ~= "jump"
 		tracks[name] = track
 		animation:Destroy()
 	end
 	local current = ""
+	local holding = false
 	local connection: RBXScriptConnection? = nil
 	local function stop()
 		if connection then
@@ -43,6 +45,11 @@ function CharacterAnimation.start(character: Model)
 			return
 		end
 		local state = humanoid:GetState()
+		local equipped = character:FindFirstChildOfClass("Tool") ~= nil
+		if equipped ~= holding then
+			holding = equipped
+			if equipped then tracks.tool:Play(0.15) else tracks.tool:Stop(0.15) end
+		end
 		local name = if character:GetAttribute("InWater") then "idle"
 			elseif state == Enum.HumanoidStateType.Jumping then "jump"
 			elseif state == Enum.HumanoidStateType.Freefall then "fall"

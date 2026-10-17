@@ -136,7 +136,8 @@ player.CharacterAdded:Connect(onCharacter)
 if player.Character then
 	task.spawn(onCharacter, player.Character)
 end
-Viewmodel.start(player)
+local combat = require(script.Combat).start(player)
+Viewmodel.start(player, combat)
 
 task.spawn(function()
 	local folder = workspace:WaitForChild("FyPoolDay"):WaitForChild("Water")

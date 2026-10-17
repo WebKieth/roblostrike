@@ -11,6 +11,7 @@ Players.CharacterAutoLoads = false
 local Config = require(ReplicatedStorage.Shared.Config)
 local Loadout = require(script.Loadout)
 local movement = require(script.Movement)
+local PoliceSkin = require(script.PoliceSkin)
 
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
@@ -21,6 +22,7 @@ equip.Parent = remotes
 local stance = Instance.new("RemoteEvent")
 stance.Name = "SetMovement"
 stance.Parent = remotes
+require(script.Combat).start(remotes)
 
 PhysicsService:RegisterCollisionGroup("Characters")
 PhysicsService:CollisionGroupSetCollidable("Characters", "Characters", false)
@@ -31,6 +33,7 @@ for _, descendant in map:GetDescendants() do
 		descendant.Enabled = false
 		descendant.Transparency = 1
 		descendant.CanCollide = false
+		descendant.CanQuery = false
 	end
 end
 
@@ -41,6 +44,7 @@ roomSpawn.CFrame = CFrame.new(Config.SpawnCFrame.Position.X, 0.08, Config.SpawnC
 roomSpawn.Anchored = true
 roomSpawn.CanCollide = false
 roomSpawn.CanTouch = false
+roomSpawn.CanQuery = false
 roomSpawn.Transparency = 1
 roomSpawn.Neutral = true
 roomSpawn.Duration = 0
@@ -50,25 +54,13 @@ local spawning: { [Player]: boolean } = {}
 local lastEquip: { [Player]: number } = {}
 local pendingEquip: { [Player]: number } = {}
 
-local function classicSkin(): HumanoidDescription
-	-- Stock Roblox classic noob: built-in R6 body, no personal avatar/accessories.
-	local description = Instance.new("HumanoidDescription")
-	description.HeadColor = Color3.fromRGB(245, 205, 48)
-	description.LeftArmColor = description.HeadColor
-	description.RightArmColor = description.HeadColor
-	description.TorsoColor = Color3.fromRGB(13, 105, 172)
-	description.LeftLegColor = Color3.fromRGB(75, 151, 75)
-	description.RightLegColor = description.LeftLegColor
-	return description
-end
-
 local spawnCharacter: (Player) -> ()
 spawnCharacter = function(player: Player)
 	if spawning[player] or player.Parent ~= Players then
 		return
 	end
 	spawning[player] = true
-	local description = classicSkin()
+	local description = PoliceSkin.description()
 	local success, result = pcall(function()
 		return Players:CreateHumanoidModelFromDescriptionAsync(description, Enum.HumanoidRigType.R6)
 	end)
@@ -93,6 +85,7 @@ spawnCharacter = function(player: Player)
 		animate:Destroy() -- Client/CharacterAnimation supplies the stock R6 tracks.
 	end
 	character.Name = player.Name
+	PoliceSkin.apply(character)
 	root.Anchored = true
 	-- Exact root placement BEFORE entering Workspace; no MoveTo/ceiling raycasts.
 	character:PivotTo(Config.SpawnCFrame * root.CFrame:Inverse() * character:GetPivot())

@@ -35,7 +35,7 @@ function HUD.new(playerGui: PlayerGui)
 		row.Font = Enum.Font.GothamMedium
 		row.TextSize = 16
 		row.TextXAlignment = Enum.TextXAlignment.Left
-		row.Text = string.format("  %d    %s", slot, definition.Name)
+		row.Text = string.format("  %d    %s", slot, definition.ModelName)
 		row.Parent = panel
 		local rowCorner = Instance.new("UICorner")
 		rowCorner.CornerRadius = UDim.new(0, 4)

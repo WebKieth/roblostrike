@@ -31,10 +31,9 @@ class WeaponViewTests(unittest.TestCase):
     def test_rifle_muzzle_frames_near_center_at_common_aspects(self):
         slot = self.slots[0]
         origin = tuple(map(float, re.search(r"View = CFrame.new\(([^)]+)\)", slot)[1].split(",")))
-        scale = tuple(map(float, re.search(r"ViewScale = Vector3.new\(([^)]+)\)", slot)[1].split(",")))
         yaw = math.radians(float(re.search(r"View = .*math.rad\(([^)]+)\)", slot)[1]))
-        # Barrel tip from the stock Garand mesh (mesh bounds are not Part.Size).
-        mx, my, mz = 0, 0.45 * scale[1], -3.26822 * scale[2]
+        # Locally authored M4A1 bore, not the removed catalog Garand mesh.
+        mx, my, mz = map(float, re.search(r"Muzzle = Vector3.new\(([^)]+)\)", slot)[1].split(","))
         x = origin[0] + math.cos(yaw) * mx + math.sin(yaw) * mz
         y = origin[1] + my
         z = origin[2] - math.sin(yaw) * mx + math.cos(yaw) * mz
@@ -45,6 +44,20 @@ class WeaponViewTests(unittest.TestCase):
                 screen_y = 0.5 - y / (2 * half_height)
                 self.assertTrue(0.5 < screen_x < 0.6)
                 self.assertTrue(0.53 < screen_y < 0.67)
+
+    def test_ads_sight_line_is_centered(self):
+        for slot in self.slots[:2]:
+            height = float(re.search(r"SightHeight = ([\d.]+)", slot)[1])
+            x, y, z = map(float, re.search(r"ADS = CFrame.new\(([^)]+)\)", slot)[1].split(","))
+            self.assertEqual(x, 0)
+            self.assertAlmostEqual(y + height, 0)
+            self.assertLess(z, -0.5)
+
+    def test_firearms_use_local_models(self):
+        self.assertIn('ModelName = "M4A1"', self.slots[0])
+        self.assertNotIn('94287666', self.slots[0])
+        for slot in self.slots[:2]:
+            self.assertIn('Procedural = true', slot)
 
     def test_hand_anchors_for_all_slots_and_support_for_rifle(self):
         self.assertEqual(len(self.slots), 4)

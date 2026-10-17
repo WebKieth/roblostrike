@@ -1,27 +1,31 @@
 --!strict
 
--- Visuals from Roblox's classic catalog gear. Only mesh/texture references;
--- none of the original gear scripts, damage code or remote loaders are used.
--- Sources and upstream revision: assets/stock/README.md.
+-- Firearms use our local GunModel geometry. Knife/grenade keep script-free
+-- classic catalog mesh references (sources: assets/stock/README.md).
 -- View is camera-local (+X right, -Z forward). Positive yaw turns the muzzle
 -- inward from the right shoulder. Hand positions are in rendered mesh space.
 -- First-person scale is separate from the world Tool's scale and grip.
 return table.freeze({
 	table.freeze({
 		Name = "Основное оружие",
-		ModelName = "M1 Garand",
-		AssetId = 94233286,
-		MeshId = "rbxassetid://94287666",
-		TextureId = "rbxassetid://94287792",
-		Icon = "rbxassetid://94295062",
-		Scale = Vector3.new(1.3, 1.3, 1.3),
-		Size = Vector3.new(0.51, 1.18, 4.35),
-		Grip = CFrame.new(0.0645, -0.3971, 0.6851,
-			0.86533, -0.02256, 0.50070, 0.10475, 0.98507, -0.13665, -0.49014, 0.17069, 0.85477),
-		ViewScale = Vector3.new(0.9, 0.9, 0.9),
-		View = CFrame.new(0.8, -0.8, -1.6) * CFrame.Angles(0, math.rad(12), 0),
-		RightHand = Vector3.new(0, -0.2, 0.65),
-		LeftHand = Vector3.new(-0.12, 0.03, -0.95),
+		ModelName = "M4A1",
+		AssetId = 0, -- Local, script-free model shared by world and viewmodel.
+		Icon = "",
+		Procedural = true,
+		Size = Vector3.new(0.32, 0.35, 0.95),
+		Grip = CFrame.new(0, -0.25, 0.65) * CFrame.Angles(math.rad(-90), 0, 0),
+		View = CFrame.new(0.7, -0.72, -1.5) * CFrame.Angles(0, math.rad(12), 0),
+		ADS = CFrame.new(0, -0.28, -1.18),
+		SightHeight = 0.28,
+		Muzzle = Vector3.new(0, 0, -2.12),
+		RightHand = Vector3.new(0, -0.3, 0.42),
+		LeftHand = Vector3.new(-0.06, -0.13, -0.85),
+		FireInterval = 0.0857, -- 700 RPM, identical for tapping and holding.
+		Damage = 28,
+		Range = 800,
+		Magazine = 30,
+		ReloadTime = 2.3,
+		Recoil = 1,
 	}),
 	table.freeze({
 		Name = "Пистолет",
@@ -36,6 +40,16 @@ return table.freeze({
 			0.83795, -0.02724, 0.54507, -0.02568, 0.99568, 0.08924, -0.54515, -0.08878, 0.83363),
 		View = CFrame.new(0.65, -0.8, -1) * CFrame.Angles(0, math.rad(10), 0),
 		RightHand = Vector3.new(0, -0.4, 0.3),
+		Procedural = true,
+		ADS = CFrame.new(0, -0.22, -0.9),
+		SightHeight = 0.22,
+		Muzzle = Vector3.new(0, 0.02, -1.05),
+		FireInterval = 0.18,
+		Damage = 34,
+		Range = 500,
+		Magazine = 8,
+		ReloadTime = 1.7,
+		Recoil = 1.35,
 	}),
 	table.freeze({
 		Name = "Нож",
