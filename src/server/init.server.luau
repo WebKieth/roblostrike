@@ -34,6 +34,7 @@ PhysicsService:RegisterCollisionGroup("Characters")
 PhysicsService:CollisionGroupSetCollidable("Characters", "Characters", false)
 
 local map = workspace:WaitForChild("FyPoolDay")
+require(script.MapDoors).start(map)
 for _, descendant in map:GetDescendants() do
 	if descendant:IsA("SpawnLocation") then
 		descendant.Enabled = false
@@ -91,7 +92,7 @@ local function spawnCharacter(player: Player, spawnAt: CFrame, saved: Loadout.Sn
 		animate:Destroy() -- Client/CharacterAnimation supplies the stock R6 tracks.
 	end
 	character.Name = player.Name
-	PoliceSkin.apply(character)
+	PoliceSkin.apply(character, player:GetAttribute("TeamId"))
 	root.Anchored = true
 	-- Exact root placement BEFORE entering Workspace; no MoveTo/ceiling raycasts.
 	character:PivotTo(spawnAt * root.CFrame:Inverse() * character:GetPivot())

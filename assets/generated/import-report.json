@@ -5,7 +5,7 @@
   "faces_in_bsp": 2048,
   "exported_surfaces": 1939,
   "parts": {
-    "Part": 6173,
+    "Part": 6142,
     "WedgePart": 1330,
     "SpawnLocation": 32
   },
@@ -35,8 +35,10 @@
       32.0
     ]
   },
+  "interactive_doors": 6,
+  "mirrors": 1,
   "limitations": [
-    "Static doors and buttons",
+    "Buttons remain static; doors require the runtime controller",
     "Visual water only; no swimming",
     "No weapons, sounds, lightmaps or CS game logic",
     "Thin surface collision shells",

@@ -11,6 +11,7 @@ class ClientPresentationTests(unittest.TestCase):
 
     def test_procedural_character_movement_and_cleanup(self):
         fixture = (ROOT / 'tools/tests/fixtures/character_animation.luau').read_text()
+        fixture = fixture.replace('-- WEAPONS_HERE', (ROOT / 'src/shared/Weapons.luau').read_text())
         source = (ROOT / 'src/client/CharacterAnimation.luau').read_text()
         self.run_luau(fixture.replace('-- ANIMATION_MODULE_HERE', source))
 

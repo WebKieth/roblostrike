@@ -20,6 +20,7 @@ local drop = remotes:WaitForChild("DropWeapon") :: RemoteEvent
 require(script.MovementInput).start(player)
 require(script.SettingsUI).start(player)
 require(script.FirstPersonVisibility).start(player)
+task.spawn(require(script.MapMirror).start, workspace:WaitForChild("FyPoolDay"))
 
 local hud = HUD.new(player:WaitForChild("PlayerGui") :: PlayerGui)
 player.CameraMode = Enum.CameraMode.LockFirstPerson

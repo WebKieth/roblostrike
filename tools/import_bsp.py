@@ -31,6 +31,7 @@ MATERIALS = {
     "light": ((255, 245, 218), 288),
     "dark": ((35, 39, 43), 272),
     "wood": ((168, 126, 78), 512),
+    "mirror": ((205, 221, 226), 272),
 }
 
 
@@ -301,6 +302,44 @@ class Scene:
         ET.indent(self.root)
         ET.ElementTree(self.root).write(path, encoding="utf-8", xml_declaration=True)
 
+    def door(self, model_id, entity, surfaces):
+        """Keep the complete brush under one pivot; never leave a static shell."""
+        name = f"Door_{model_id}"
+        model = ET.SubElement(self.group("Doors"), "Item", {"class": "Model"})
+        prop(ET.SubElement(model, "Properties"), "string", "Name", name)
+        self.groups[name] = model
+        points = [p for surface in surfaces for p in surface[4]]
+        low = tuple(min(p[i] for p in points) for i in range(3))
+        high = tuple(max(p[i] for p in points) for i in range(3))
+        mat = "blue_partition" if "blue" in surfaces[0][2] else "red_partition"
+        self.part(name, "Panel", mul(add(low, high), 0.5), sub(high, low), mat)
+        origin = position(tuple(map(float, entity["origin"].split())))
+        # Value objects survive Rojo/XML import without custom attribute encoding.
+        for cls, key, value in [("Vector3Value", "Hinge", origin),
+                                ("NumberValue", "OpenAngle", float(entity.get("distance", 90))),
+                                ("NumberValue", "Speed", float(entity.get("speed", 100))),
+                                ("NumberValue", "CloseDelay", float(entity.get("wait", 4)))]:
+            item = ET.SubElement(model, "Item", {"class": cls})
+            props = ET.SubElement(item, "Properties")
+            prop(props, "string", "Name", key)
+            if cls == "Vector3Value":
+                vector(props, "Value", value)
+            else:
+                prop(props, "double", "Value", value)
+        # Handles on both sides move with the leaf, away from the hinge edge.
+        z = high[2] - 0.4
+        for side in (-1, 1):
+            self.part(name, f"Handle_{side}", ((low[0]+high[0])/2 + side*0.1, 3.1, z),
+                      (0.16, 0.12, 0.4), "metal", False)
+
+    def passage_mirror(self):
+        # West passage, recessed wall above the existing basin. Front faces +X.
+        self.part("Mirrors", "PassageMirror", (-41.94, 6, -32), (0.06, 3.6, 7.5), "mirror")
+        for y in (4.14, 7.86):
+            self.part("Mirrors", "Frame", (-41.9, y, -32), (0.14, 0.12, 7.74), "metal", False)
+        for z in (-35.81, -28.19):
+            self.part("Mirrors", "Frame", (-41.9, 6, z), (0.14, 3.6, 0.12), "metal", False)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -313,9 +352,12 @@ def main():
     obj = ["# GoldSrc geometry, replacement material colors; 1 unit = 1 Roblox stud", "mtllib fy_pool_day.mtl"]
     index = 1
     surfaces = list(bsp.surfaces())
+    doors = {int(e["model"][1:]): e for e in bsp.entities
+             if e.get("classname") == "func_door_rotating"}
     used = collections.Counter()
     for face_id, model_id, name, kind, points, uvs in surfaces:
-        scene.surface(face_id, name, kind, points)
+        if model_id not in doors:
+            scene.surface(face_id, name, kind, points)
         mat = material(name, kind)
         used[mat] += 1
         obj.extend((f"o model_{model_id}_face_{face_id}", f"usemtl {mat}"))
@@ -324,6 +366,9 @@ def main():
         for i in range(1, len(points)-1):
             obj.append("f " + " ".join(f"{j}/{j}" for j in (index, index+i, index+i+1)))
         index += len(points)
+    for model_id, entity in doors.items():
+        scene.door(model_id, entity, [s for s in surfaces if s[1] == model_id])
+    scene.passage_mirror()
     spawns = []
     for entity in bsp.entities:
         kind = entity.get("classname")
@@ -351,7 +396,9 @@ def main():
         "materials": dict(used),
         "bounds": {"min": [min(p[i] for p in all_points) for i in range(3)],
                    "max": [max(p[i] for p in all_points) for i in range(3)]},
-        "limitations": ["Static doors and buttons", "Visual water only; no swimming",
+        "interactive_doors": len(doors),
+        "mirrors": 1,
+        "limitations": ["Buttons remain static; doors require the runtime controller", "Visual water only; no swimming",
                          "No weapons, sounds, lightmaps or CS game logic", "Thin surface collision shells",
                          "Original texture pixels excluded; procedural replacement colors and tile grout",
                          "Source map geometry is not covered by replacement material permissions"],

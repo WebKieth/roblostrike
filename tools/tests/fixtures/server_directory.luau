@@ -49,9 +49,10 @@ function teleports:TeleportAsync(place,list,options)
 	assert(place==123)
 	self.last={player=list[1],access=options.ReservedServerAccessCode}
 end
+local filteredOverride = nil
 local text={FilterStringAsync=function(_,name,id)
 	assert(id)
-	return {GetNonChatStringForBroadcastAsync=function() return "filtered "..name end}
+	return {GetNonChatStringForBroadcastAsync=function() return filteredOverride or "filtered "..name end}
 end}
 local replicated={Shared={ServerBrowser="browser"}}
 local game={PrivateServerId="",PrivateServerOwnerId=0,PlaceId=123,shutdown={}}
@@ -103,6 +104,12 @@ assert(request(owner,"Leave").ok and request(guest,"List","").total==0)
 studio=false
 owner:SetAttribute("InSession",false)
 controller,state,request,joins=start()
+for _, censored in {"######", "Arena ####", "   "} do
+	filteredOverride = censored
+	assert(request(owner,"Create","Arena").error, "censored/empty names must request a replacement")
+	assert(teleports.count==0 and store.writes==0, "reject before reserving, storing or teleporting")
+end
+filteredOverride = nil
 assert(request(owner,"Create","Arena").ok)
 assert(not state:GetAttribute("OwnerUserId") and teleports.last.access=="secret1")
 assert(store.values.reserved1.name=="filtered Arena" and not store.values.reserved1.ready)

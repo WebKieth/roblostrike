@@ -11,7 +11,7 @@ local Effects = require(script.Parent.ShotEffects)
 
 local Viewmodel = {}
 
-local function part(name: string, size: Vector3, color: Color3, parent: Model): Part
+local function part(name: string, size: Vector3, color: Color3, parent: Model, blocky: boolean?): Part
 	local result = Instance.new("Part")
 	result.Name = name
 	result.Size = size * (if name == "Weapon" then 1 else SCALE)
@@ -22,7 +22,7 @@ local function part(name: string, size: Vector3, color: Color3, parent: Model): 
 	result.CanTouch = false
 	result.CanQuery = false
 	result.CastShadow = false
-	if name ~= "Weapon" then
+	if name ~= "Weapon" and not blocky then
 		local mesh = Instance.new("SpecialMesh")
 		mesh.MeshType = Enum.MeshType.Sphere
 		mesh.Parent = result
@@ -104,11 +104,13 @@ function Viewmodel.start(player: Player, combat: any)
 				mesh.Parent = handle
 			end
 			weaponModel:ScaleTo(SCALE)
-			rightArm = part("RightSleeve", Vector3.new(0.55, 1.5, 0.55), Style.Uniform, newModel)
-			rightGlove = part("RightGlove", Vector3.new(0.4, 0.48, 0.4), Style.Leather, newModel)
+			local uniform = if player:GetAttribute("TeamId") == "Red" then Style.TerroristUniform else Style.Uniform
+			local blocky = player:GetAttribute("TeamId") ~= "Red"
+			rightArm = part("RightSleeve", Vector3.new(0.55, 1.5, 0.55), uniform, newModel, blocky)
+			rightGlove = part("RightGlove", Vector3.new(0.4, 0.48, 0.4), Style.Leather, newModel, blocky)
 			if definition.LeftHand then
-				leftArm = part("LeftSleeve", Vector3.new(0.55, 1.5, 0.55), Style.Uniform, newModel)
-				leftGlove = part("LeftGlove", Vector3.new(0.4, 0.48, 0.4), Style.Leather, newModel)
+				leftArm = part("LeftSleeve", Vector3.new(0.55, 1.5, 0.55), uniform, newModel, blocky)
+				leftGlove = part("LeftGlove", Vector3.new(0.4, 0.48, 0.4), Style.Leather, newModel, blocky)
 			end
 		end
 		-- Hide only the local world weapon. Other players still see the real Tool.

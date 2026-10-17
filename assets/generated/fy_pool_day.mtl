@@ -45,3 +45,7 @@ d 1
 newmtl wood
 Kd 0.65882 0.49412 0.30588
 d 1
+
+newmtl mirror
+Kd 0.80392 0.86667 0.88627
+d 1

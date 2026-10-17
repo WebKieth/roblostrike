@@ -161,7 +161,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 		if not template then return nil end
 		local model = template:Clone()
 		model.Name = id .. " Bot " .. index
-		PoliceSkin.apply(model)
+		PoliceSkin.apply(model, id)
 		local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 		root.Anchored = true
 		model:PivotTo(Rules.spawn(id, index) * root.CFrame:Inverse() * model:GetPivot())

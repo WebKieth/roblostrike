@@ -73,9 +73,13 @@ function CharacterAnimation.start(character: Model)
 			local grip = right.Part1:FindFirstChild("RightGrip")
 			if definition and definition.Procedural and left and grip
 				and (grip:IsA("Motor6D") or grip:IsA("Weld")) then
-				-- Solve the supporting hand from the same grip and mesh-space anchor
-				-- used by the weapon, including the scaled rig's grip offsets.
-				local weaponFrame = frame * grip.C0 * grip.C1:Inverse()
+				-- Aim the HANDLE in torso space, not along the sloping rigid R6 arm.
+				-- GunModel's bore is -Z. Both hands then follow this level weapon.
+				local weaponFrame = CFrame.new(Vector3.new(0.7, 0.65, -1.25) * scale)
+				local trigger = definition.RightHand or Vector3.new(0, -0.4, 0.3)
+				frame = armFrame(right, weaponFrame:PointToWorldSpace(trigger * scale))
+				right.Transform = right.C0:Inverse() * frame * right.C1
+				grip.C0 = frame:Inverse() * weaponFrame * grip.C1
 				local anchor = definition.LeftHand or Vector3.new(-0.2, -0.4, 0.3)
 				local support = weaponFrame:PointToWorldSpace(anchor * scale)
 				left.Transform = left.C0:Inverse() * armFrame(left, support) * left.C1

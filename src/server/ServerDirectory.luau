@@ -87,6 +87,10 @@ function Directory.start(remotes: Folder, state: Folder, created: (Player, strin
 				if not studio then
 					local filtered = TextService:FilterStringAsync(name, player.UserId, Enum.TextFilterContext.PublicChat)
 					name = filtered:GetNonChatStringForBroadcastAsync()
+					-- Never publish a censored title or fall back to unfiltered input.
+					if not Browser.validName(name) or string.find(name, "#", 1, true) then
+						return { error = "Roblox скрыл название сервера. Выберите другое имя без личных данных и запрещённых слов." }
+					end
 				end
 				if player.Parent ~= Players then return { error = "Игрок отключился." } end
 				if studio then
