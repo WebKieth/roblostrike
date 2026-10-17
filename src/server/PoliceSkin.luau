@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Style = require(ReplicatedStorage.Shared.PoliceStyle)
+local Config = require(ReplicatedStorage.Shared.Config)
 
 local PoliceSkin = {}
 
@@ -125,6 +126,9 @@ function PoliceSkin.apply(character: Model)
 	character:GetAttributeChangedSignal("Armor"):Connect(updateArmor)
 	character:GetAttributeChangedSignal("Helmet"):Connect(updateArmor)
 	updateArmor()
+	-- Scale the complete R6 rig, joints and uniform together for players and bots.
+	character:ScaleTo(Config.CharacterScale)
+	character:SetAttribute("CharacterScale", Config.CharacterScale)
 end
 
 return PoliceSkin

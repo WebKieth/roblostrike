@@ -113,6 +113,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		end
 	end
 	local function decorate(model: Model, id: string, index: number, bot: boolean)
+		local scale = model:GetAttribute("CharacterScale") or 1
 		model:SetAttribute("TeamId", id)
 		model:SetAttribute("RosterIndex", index)
 		model:SetAttribute("SessionActor", true)
@@ -138,10 +139,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			local arm = model:FindFirstChild(name) :: BasePart?
 			if arm then
 				local band = Instance.new("Part")
-				band.Name, band.Size = "TeamArmband", Vector3.new(1.09, 0.42, 1.09)
+				band.Name, band.Size = "TeamArmband", Vector3.new(1.09 * scale, 0.42 * scale, 1.09 * scale)
 				band.Color = Rules.Colors[id]
 				band.CanCollide, band.CanTouch, band.CanQuery, band.Massless = false, false, false, true
-				band.CFrame, band.Parent = arm.CFrame * CFrame.new(0, 0.55, 0), model
+				band.CFrame, band.Parent = arm.CFrame * CFrame.new(0, 0.55 * scale, 0), model
 				local weld = Instance.new("WeldConstraint")
 				weld.Part0, weld.Part1, weld.Parent = arm, band, band
 			end

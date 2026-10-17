@@ -3,6 +3,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
+local Config = require(ReplicatedStorage.Shared.Config)
+local SCALE = Config.ViewmodelScale
 local Style = require(ReplicatedStorage.Shared.PoliceStyle)
 local GunModel = require(ReplicatedStorage.Shared.GunModel)
 local Effects = require(script.Parent.ShotEffects)
@@ -12,7 +14,7 @@ local Viewmodel = {}
 local function part(name: string, size: Vector3, color: Color3, parent: Model): Part
 	local result = Instance.new("Part")
 	result.Name = name
-	result.Size = size
+	result.Size = size * (if name == "Weapon" then 1 else SCALE)
 	result.Color = color
 	result.Material = Enum.Material.SmoothPlastic
 	result.Anchored = true
@@ -32,10 +34,11 @@ end
 -- Keep the wrist on the weapon, with the elbow tucked below/behind the camera.
 -- Both endpoints share the weapon's bob instead of floating independently.
 local function placeArm(arm: Part, glove: Part?, elbow: Vector3, wrist: Vector3)
-	arm.Size = Vector3.new(0.45, (wrist - elbow).Magnitude, 0.45)
+	elbow = wrist + (elbow - wrist) * SCALE
+	arm.Size = Vector3.new(0.45 * SCALE, (wrist - elbow).Magnitude, 0.45 * SCALE)
 	arm.CFrame = CFrame.lookAt((elbow + wrist) * 0.5, wrist) * CFrame.Angles(math.pi / 2, 0, 0)
 	if glove then
-		glove.CFrame = arm.CFrame * CFrame.new(0, arm.Size.Y * 0.5 - 0.08, 0)
+		glove.CFrame = arm.CFrame * CFrame.new(0, arm.Size.Y * 0.5 - 0.08 * SCALE, 0)
 	end
 end
 
@@ -100,6 +103,7 @@ function Viewmodel.start(player: Player, combat: any)
 				mesh.Scale = definition.ViewScale or definition.Scale
 				mesh.Parent = handle
 			end
+			weaponModel:ScaleTo(SCALE)
 			rightArm = part("RightSleeve", Vector3.new(0.55, 1.5, 0.55), Style.Uniform, newModel)
 			rightGlove = part("RightGlove", Vector3.new(0.4, 0.48, 0.4), Style.Leather, newModel)
 			if definition.LeftHand then
@@ -134,7 +138,7 @@ function Viewmodel.start(player: Player, combat: any)
 		if definition.FireInterval then
 			-- Combat already resolved cover, reticle and firing from this pose.
 			weaponFrame = combat.WeaponFrame or weaponFrame
-			combat.Muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle)
+			combat.Muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle * SCALE)
 			Effects.updateMuzzle(combat.Muzzle, weaponFrame.LookVector)
 		end
 		if weapon then
@@ -142,11 +146,11 @@ function Viewmodel.start(player: Player, combat: any)
 		end
 		if rightArm then
 			placeArm(rightArm, rightGlove, base:PointToWorldSpace(Vector3.new(1, -1.65, 0.15)),
-				weaponFrame:PointToWorldSpace(definition.RightHand))
+				weaponFrame:PointToWorldSpace(definition.RightHand * SCALE))
 		end
 		if leftArm and definition.LeftHand then
 			placeArm(leftArm, leftGlove, base:PointToWorldSpace(Vector3.new(-0.25, -1.65, 0.1)),
-				weaponFrame:PointToWorldSpace(definition.LeftHand))
+				weaponFrame:PointToWorldSpace(definition.LeftHand * SCALE))
 		end
 	end)
 end

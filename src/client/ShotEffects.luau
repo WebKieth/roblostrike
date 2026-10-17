@@ -45,11 +45,12 @@ function ShotEffects.flash(position: Vector3, followMuzzle: boolean?, direction:
 	light.Parent = flash
 end
 
-function ShotEffects.casing(weaponFrame: CFrame, definition: any)
+function ShotEffects.casing(weaponFrame: CFrame, definition: any, scale: number?)
 	if not definition.EjectionPort or not definition.CasingSize then return end
 	if #casings >= 40 then table.remove(casings, 1).part:Destroy() end
-	local origin = weaponFrame:PointToWorldSpace(definition.EjectionPort)
-	local shell = part("EjectedCasing", definition.CasingSize, CFrame.new(origin), Color3.fromRGB(189, 139, 55))
+	local factor = scale or 1
+	local origin = weaponFrame:PointToWorldSpace(definition.EjectionPort * factor)
+	local shell = part("EjectedCasing", definition.CasingSize * factor, CFrame.new(origin), Color3.fromRGB(189, 139, 55))
 	shell.Shape, shell.Material = Enum.PartType.Cylinder, Enum.Material.Metal
 	local filter = RaycastParams.new()
 	filter.FilterDescendantsInstances = { folder }

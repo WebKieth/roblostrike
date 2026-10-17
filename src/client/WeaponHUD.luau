@@ -14,7 +14,7 @@ function HUD.new(playerGui: PlayerGui)
 	gui.Parent = playerGui
 	local vitals = Instance.new("TextLabel")
 	vitals.Name = "Vitals"
-	vitals.Position = UDim2.new(0, 16, 1, -55)
+	vitals.Position = UDim2.new(0, 158, 1, -55)
 	vitals.Size = UDim2.fromOffset(320, 35)
 	vitals.BackgroundTransparency = 1
 	vitals.TextColor3 = Color3.fromRGB(232, 239, 244)
@@ -23,12 +23,31 @@ function HUD.new(playerGui: PlayerGui)
 	vitals.Font = Enum.Font.GothamMedium
 	vitals.TextSize = 18
 	vitals.Parent = gui
+	local healthTrack = Instance.new("Frame")
+	healthTrack.Name = "HealthBar"
+	healthTrack.Position = UDim2.new(0, 16, 1, -44)
+	healthTrack.Size = UDim2.fromOffset(126, 13)
+	healthTrack.BackgroundColor3 = Color3.fromRGB(40, 49, 54)
+	healthTrack.BorderSizePixel = 0
+	healthTrack.Parent = gui
+	Instance.new("UICorner", healthTrack).CornerRadius = UDim.new(0, 4)
+	local healthFill = Instance.new("Frame")
+	healthFill.Name = "Fill"
+	healthFill.Size = UDim2.fromScale(1, 1)
+	healthFill.BackgroundColor3 = Color3.fromRGB(78, 201, 117)
+	healthFill.BorderSizePixel = 0
+	healthFill.Parent = healthTrack
+	Instance.new("UICorner", healthFill).CornerRadius = UDim.new(0, 4)
 	local player = game:GetService("Players").LocalPlayer
 	game:GetService("RunService").Heartbeat:Connect(function()
 		local character = player.Character
 		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 		vitals.Visible = humanoid ~= nil and humanoid.Health > 0
+		healthTrack.Visible = vitals.Visible
 		if humanoid and character then
+			local fraction = if humanoid.MaxHealth > 0 then math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1) else 0
+			healthFill.Size = UDim2.fromScale(fraction, 1)
+			healthFill.BackgroundColor3 = Color3.fromRGB(221, 69, 69):Lerp(Color3.fromRGB(78, 201, 117), fraction)
 			vitals.Text = string.format("HP %d   БРОНЯ %d%s", math.ceil(humanoid.Health),
 				character:GetAttribute("Armor") or 0, if character:GetAttribute("Helmet") then " + КАСКА" else "")
 		end

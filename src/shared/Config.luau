@@ -10,6 +10,8 @@ return table.freeze({
 	CrouchDepth = 0.9,
 	RespawnDelay = 3,
 	WeaponHUDDuration = 2,
+	CharacterScale = 0.9,
+	ViewmodelScale = 0.9,
 	-- Blue-tiled room: floor Y=0, underside of ceiling Y=10.
 	-- This is the HumanoidRootPart position, NOT a SpawnLocation surface.
 	SpawnCFrame = CFrame.new(-14, 3.1, 4) * CFrame.Angles(0, math.pi, 0),

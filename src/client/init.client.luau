@@ -29,6 +29,7 @@ task.spawn(function()
 	for _ = 1, 20 do
 		local ok = pcall(function()
 			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
 		end)
 		if ok then
 			return

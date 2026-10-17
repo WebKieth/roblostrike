@@ -6,6 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
+local Config = require(ReplicatedStorage.Shared.Config)
+local SCALE = Config.ViewmodelScale
 local Ballistics = require(ReplicatedStorage.Shared.Ballistics)
 local Effects = require(script.Parent.ShotEffects)
 
@@ -225,14 +227,15 @@ function Combat.start(player: Player)
 		local sightHit = workspace:Raycast(aim.Position, aim.LookVector * definition.Range, filter)
 		local sightDistance = if sightHit then (sightHit.Position - aim.Position).Magnitude else definition.Range
 		local sightTarget = aim.Position + aim.LookVector * math.max(50, sightDistance)
-		local translation = definition.View.Position:Lerp(definition.ADS.Position, state.ADS)
+		local ads = definition.ADS.Position
+		local translation = definition.View.Position:Lerp(Vector3.new(ads.X, ads.Y * SCALE, ads.Z), state.ADS)
 		local position = aim:PointToWorldSpace(translation)
-		local rotation = CFrame.lookAt(position + aim.UpVector * definition.SightHeight, sightTarget, aim.UpVector).Rotation
+		local rotation = CFrame.lookAt(position + aim.UpVector * definition.SightHeight * SCALE, sightTarget, aim.UpVector).Rotation
 		local weaponFrame = CFrame.new(position) * rotation * CFrame.new(0, 0, state.Kick * 0.21)
 		if tool:GetAttribute("Reloading") then
 			weaponFrame *= CFrame.new(0.15, -0.35, 0.15) * CFrame.Angles(0, 0, math.rad(-25))
 		end
-		local muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle)
+		local muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle * SCALE)
 		local reach = muzzle - head.Position
 		local cover = if reach.Magnitude > 0.001 then workspace:Raycast(head.Position, reach, filter) else nil
 		if cover then
@@ -266,7 +269,7 @@ function Combat.start(player: Player)
 			-- Head-relative positions are independent of character replication lag.
 			fire:FireServer(muzzle - head.Position, direction)
 			Effects.flash(muzzle, true, direction)
-			Effects.casing(weaponFrame, definition)
+			Effects.casing(weaponFrame, definition, SCALE)
 			Effects.tracer(muzzle, target)
 			Effects.sound(muzzle, definition)
 			index += 1

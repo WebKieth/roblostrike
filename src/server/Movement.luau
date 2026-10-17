@@ -83,10 +83,11 @@ function Movement.freeze(player: Player)
 end
 
 local function canStand(state: State): boolean
-	-- R6 head top is root+2. Check only the extra space needed to stand,
+	-- Scaled R6 head top is root + 2 * scale. Check the extra space to stand,
 	-- not the floor/legs; stay crouched under a low ceiling until it is clear.
-	local center = state.root.CFrame * CFrame.new(0, 2 + Config.CrouchDepth / 2 + 0.025, 0)
-	return #workspace:GetPartBoundsInBox(center, Vector3.new(1.9, Config.CrouchDepth, 1.9), state.filter) == 0
+	local scale = state.character:GetScale()
+	local center = state.root.CFrame * CFrame.new(0, 2 * scale + Config.CrouchDepth / 2 + 0.025, 0)
+	return #workspace:GetPartBoundsInBox(center, Vector3.new(1.9 * scale, Config.CrouchDepth, 1.9 * scale), state.filter) == 0
 end
 
 function Movement.step(_dt: number)

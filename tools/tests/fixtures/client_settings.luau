@@ -100,11 +100,21 @@ renders.RobostrikeSettingsMouse()
 assert(input.MouseIconEnabled and input.MouseBehavior==Enum.MouseBehavior.Default)
 local track
 local close
+local sensitivityTrack
 for _,item in gui:GetDescendants() do
 	if item.Name=="GunfireSlider" then track=item end
+	if item.Name=="SensitivitySlider" then sensitivityTrack=item end
 	if item.Text=="ВЕРНУТЬСЯ В ИГРУ" then close=item end
 end
 assert(track and close)
+assert(sensitivityTrack and input.MouseDeltaSensitivity==1, "default mouse sensitivity")
+local sensitivityMouse={UserInputType=1,Position={X=100}}
+sensitivityTrack.InputBegan:Fire(sensitivityMouse)
+assert(input.MouseDeltaSensitivity==2, "maximum sensitivity applies immediately")
+input.InputChanged:Fire({UserInputType=2,Position={X=-10}})
+assert(input.MouseDeltaSensitivity==.1, "minimum remains nonzero")
+input.InputEnded:Fire(sensitivityMouse)
+assert(audio.get("Master")==.5, "sensitivity does not change audio")
 local mouse={UserInputType=1,Position={X=20}}
 track.InputBegan:Fire(mouse)
 assert(audio.get("Gunfire")==.2)
