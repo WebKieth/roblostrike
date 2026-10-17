@@ -195,19 +195,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		end
 		return false
 	end
-	local function ready(botLimit: number): boolean
-		if not hasHumans() then return false end
-		for _, roster in slots do
-			local humans = 0
-			for _, slot in roster do if slot.player then humans += 1 end end
-			if humans == 0 and botLimit == 0 then return false end
-		end
-		return true
-	end
 	local startRound: (number) -> ()
 	startRound = function(expectedGeneration: number)
 		if expectedGeneration ~= generation or starting or not active or not launched then return end
-		if not ready(botsPerTeam) then
+		if not hasHumans() then
 			phase("Lobby")
 			clearModels()
 			return
@@ -353,9 +344,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			end
 			state:SetAttribute("SetupError", nil)
 		elseif (command == "Start" and not launched) or (command == "Restart" and launched) then
-			if not ready(pendingBots) then
-				state:SetAttribute("SetupError", if not hasHumans() then "Сначала выберите команду."
-					else "Для игры без ботов нужны игроки в обеих командах.")
+			if not hasHumans() then
+				state:SetAttribute("SetupError", "Сначала выберите команду.")
 				return
 			end
 			if launched then
@@ -452,6 +442,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		if current == "Freeze" and expired then phase("Combat") end
 		if current == "Intermission" and expired then task.spawn(startRound, generation) end
 		if current ~= "Combat" then return end
+		-- Human-only sessions are an endless sandbox, even with no living team.
+		if botsPerTeam == 0 then return end
 		local living = { Red = 0, Blue = 0 }
 		for id, roster in slots do
 			for _, slot in roster do if alive(slot.model) then living[id] += 1 end end

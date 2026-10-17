@@ -163,7 +163,7 @@ function SessionHUD.start(player: Player)
 		local height = if configuring or restarting then 460 else 310
 		panel.Size, constraint.MaxSize = UDim2.new(0.9, 0, 0, height), Vector2.new(640, height)
 		setupPanel.Visible = configuring or restarting
-		botCount.Text = if bots == 0 then "Без ботов · только игроки" else string.format("До %d ботов на команду · до %d участников на сторону", bots, Rules.TeamSize)
+		botCount.Text = if bots == 0 then "Без ботов · бесконечная сессия" else string.format("До %d ботов на команду · до %d участников на сторону", bots, Rules.TeamSize)
 		botCount.TextScaled = true
 		for count, b in botButtons do
 			b.Interactable = admin and editable
@@ -177,7 +177,7 @@ function SessionHUD.start(player: Player)
 		score.Text = string.format('<font color="#E24146">КРАСНЫЕ  %d</font>  :  <font color="#4191F5">%d  СИНИЕ</font>', state:GetAttribute("RedWins") or 0, state:GetAttribute("BlueWins") or 0)
 		subtitle.Text = if waiting then "Ожидание администратора" else string.format("Выбери команду · бой %d × %d", Rules.TeamSize, Rules.TeamSize)
 		footnote.Text = player:GetAttribute("TeamMenuError") or state:GetAttribute("SetupError") or (if waiting then "Сессия начнётся, когда подключится владелец игры."
-			elseif configuring then (if bots == 0 then "Выберите команды. Для старта нужен хотя бы один игрок с каждой стороны."
+			elseif configuring then (if bots == 0 then "Выбери команду — можно играть одному. Сессия без ботов длится до выхода или перезапуска из меню M."
 				else "Выберите команды. Боты займут свободные места. Количество ботов задаёт администратор перед стартом.")
 			elseif restarting then "Выбери команду и количество ботов. Перезапуск сбросит счёт и вернёт всех на спавн.\nБез перезапуска новые настройки не применяются. M — закрыть."
 			elseif player:GetAttribute("TeamId") then "Выбор любой команды = смерть и наблюдение до нового раунда.\nM — закрыть меню. Пока меню открыто, тебя могут убить."
@@ -224,7 +224,9 @@ function SessionHUD.start(player: Player)
 			end
 			spectator.Text = "НАБЛЮДЕНИЕ · " .. target.Name .. " · M — команда"
 		else
-			spectator.Text = if player:GetAttribute("TeamId") then "Нет живых союзников · ожидание нового раунда" else ""
+			spectator.Text = if not player:GetAttribute("TeamId") then ""
+				elseif state:GetAttribute("BotsPerTeam") == 0 then "Нет живых союзников · M — меню перезапуска сессии"
+				else "Нет живых союзников · ожидание нового раунда"
 			camera.CameraType = Enum.CameraType.Scriptable
 			camera.CFrame = CFrame.lookAt(Vector3.new(-12, 28, -37), Vector3.new(-12, 0, -37))
 		end

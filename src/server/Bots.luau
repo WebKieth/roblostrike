@@ -4,12 +4,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Combat = require(script.Parent.Combat)
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
+local Rules = require(ReplicatedStorage.Shared.SessionRules)
+local Tactics = require(script.Parent.BotTactics)
 local Bots = {}
 
 function Bots.start(slots: any, state: Folder, remotes: Folder)
 	local brains: { [Model]: any } = {}
 	local random = Random.new()
 	local elapsed = 0
+	local reports: { [string]: any } = {}
 	local function living(model: Model?): boolean
 		local h = if model then model:FindFirstChildOfClass("Humanoid") else nil
 		return model ~= nil and model.Parent ~= nil and h ~= nil and h.Health > 0
@@ -42,15 +45,67 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 		end
 		humanoid:MoveTo(destination)
 	end
+	local function navigate(model: Model, h: Humanoid, root: BasePart, brain: any, destination: Vector3, roster: any, now: number)
+		if (root.Position - destination).Magnitude < 3 then
+			move(model, h, root, root.Position, roster)
+			return
+		end
+		local changed = not brain.pathGoal or (brain.pathGoal - destination).Magnitude > 6
+		if changed then
+			brain.waypoints, brain.waypoint, brain.nextPath, brain.pathGoal = {}, 1, 0, destination
+		end
+		if now >= brain.nextPath and not brain.computing then
+			brain.nextPath, brain.computing = now + 1.5, true
+			local start = root.Position
+			local goal = brain.pathGoal
+			task.spawn(function()
+				local path = PathfindingService:CreatePath({ AgentRadius = 1.5, AgentHeight = 5, AgentCanJump = true, WaypointSpacing = 4 })
+				local ok = pcall(function() path:ComputeAsync(start, goal) end)
+				-- ComputeAsync may finish after a death, round end, or change of plan.
+				if brains[model] == brain and living(model) and state:GetAttribute("Phase") == "Combat"
+					and brain.pathGoal == goal then
+					if ok and path.Status == Enum.PathStatus.Success then
+						brain.waypoints, brain.waypoint = path:GetWaypoints(), 2
+						model:SetAttribute("PathFailed", false)
+					else
+						brain.waypoints = {}
+						model:SetAttribute("PathFailed", true)
+					end
+				end
+				brain.computing = false
+			end)
+		end
+		local waypoint = brain.waypoints[brain.waypoint]
+		while waypoint and (root.Position - waypoint.Position).Magnitude < 3 do
+			brain.waypoint += 1
+			waypoint = brain.waypoints[brain.waypoint]
+		end
+		if waypoint then
+			h.Jump = waypoint.Action == Enum.PathWaypointAction.Jump
+			move(model, h, root, waypoint.Position, roster)
+		else
+			-- Failed/pending paths must not make the bot run straight into a wall.
+			move(model, h, root, root.Position, roster)
+		end
+		if now >= (brain.progressAt or 0) then
+			if brain.progress and (root.Position - brain.progress).Magnitude < 1 then
+				brain.nextPath = 0
+			end
+			brain.progress, brain.progressAt = root.Position, now + 1.5
+		end
+	end
 	RunService.Heartbeat:Connect(function(dt)
 		elapsed += dt
 		if elapsed < 0.1 then return end
 		elapsed = 0
 		for model in brains do if not living(model) then brains[model] = nil end end
-		if state:GetAttribute("Phase") ~= "Combat" then return end
+		if state:GetAttribute("Phase") ~= "Combat" then
+			table.clear(reports)
+			return
+		end
 		local now = os.clock()
 		for id, roster in slots do
-			for _, slot in roster do
+			for index, slot in roster do
 				local model = slot.model
 				if slot.player or not living(model) then continue end
 				local h = model:FindFirstChildOfClass("Humanoid") :: Humanoid
@@ -58,7 +113,9 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 				local head = model:FindFirstChild("Head") :: BasePart
 				local brain = brains[model]
 				if not brain then
-					brain = { nextShot = 0, nextPath = 0, waypoints = {}, waypoint = 1, burst = 0 }
+					brain = { nextShot = 0, nextPath = 0, waypoints = {}, waypoint = 1, burst = 0,
+						nextPlan = 0, health = h.Health, hurtUntil = 0, lastSeenAt = -math.huge,
+						side = if index % 2 == 0 then -1 else 1, patrol = index }
 					brains[model] = brain
 					root:SetNetworkOwner(nil)
 				end
@@ -68,6 +125,23 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 				local filter = RaycastParams.new()
 				filter.FilterDescendantsInstances = { model }
 				filter.IgnoreWater = true
+				local enemies: { Vector3 } = {}
+				local allies: { Vector3 } = {}
+				local characters: { Instance } = { model }
+				for _, team in slots do
+					for _, member in team do
+						if living(member.model) then
+							table.insert(characters, member.model)
+							if team == roster and member.model ~= model then
+								table.insert(allies, (member.model.HumanoidRootPart :: BasePart).Position)
+							end
+						end
+					end
+				end
+				local geometry = RaycastParams.new()
+				geometry.FilterDescendantsInstances = characters
+				geometry.IgnoreWater, geometry.RespectCanCollide = true, true
+				geometry.CollisionGroup = "Characters"
 				for _, enemy in slots[if id == "Red" then "Blue" else "Red"] do
 					if not living(enemy.model) then continue end
 					local enemyHead = enemy.model:FindFirstChild("Head") :: BasePart?
@@ -75,8 +149,11 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 					local delta = enemyHead.Position - head.Position
 					local hit = workspace:Raycast(head.Position, delta, filter)
 					local seen = hit == nil or hit.Instance:IsDescendantOf(enemy.model)
-					if (seen and not visible) or (seen == visible and delta.Magnitude < distance) then
-						target, visible, distance = enemy.model, seen, delta.Magnitude
+					if seen then table.insert(enemies, enemyHead.Position) end
+					-- Stick to the current visible opponent unless another is much closer.
+					local priority = delta.Magnitude * (if enemy.model == brain.target then 0.75 else 1)
+					if seen and priority < distance then
+						target, visible, distance = enemy.model, true, priority
 					end
 				end
 				if not visible or target ~= brain.target then
@@ -85,21 +162,63 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 					brain.burst = 0
 				end
 				brain.target = if visible then target else nil
-				if not target then continue end
-				local targetRoot = target:FindFirstChild("HumanoidRootPart") :: BasePart
-				if visible then
+				if h.Health < brain.health then brain.hurtUntil, brain.nextPlan = now + 2, 0 end
+				brain.health = h.Health
+				local tool = model:FindFirstChildOfClass("Tool")
+				-- Reload independently of visibility: hiding must not stall the timer.
+				if tool then
+					local ammo = tool:GetAttribute("Ammo") or 0
+					if not brain.reloading and (ammo <= 0 or (not visible and ammo < 10)) then
+						brain.reloading, brain.nextPlan = now + Weapons[1].ReloadTime, 0
+						tool:SetAttribute("Reloading", true)
+					end
+					if brain.reloading and now >= brain.reloading then
+						tool:SetAttribute("Ammo", Weapons[1].Magazine)
+						tool:SetAttribute("Reloading", false)
+						brain.reloading, brain.nextPlan = nil, 0
+					end
+				end
+				local targetRoot = if target then target:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+				if targetRoot then
+					distance = (targetRoot.Position - root.Position).Magnitude
+					brain.lastSeen, brain.lastSeenAt = targetRoot.Position, now
+					reports[id] = { position = targetRoot.Position, time = now }
+				end
+				local report = reports[id]
+				local known = if now - brain.lastSeenAt < 7 then brain.lastSeen
+					else if report and now - report.time < 6 then report.position else nil
+				local mode = Tactics.mode(h.Health, brain.reloading ~= nil, now < brain.hurtUntil, #enemies, #allies + 1)
+				local retreat = mode == "Retreat"
+				-- Briefly hold cover, then take a firing angle instead of immediately rushing out.
+				local contact = now - brain.lastSeenAt < 4
+				local peek = (now + index) % 5 > 1.5
+				if known and (visible or retreat or contact) then
+					if now >= brain.nextPlan or brain.mode ~= mode then
+						brain.nextPlan = now + random:NextNumber(1.2, 2)
+						brain.destination = Tactics.choose(model, root.Position, known + Vector3.new(0, 1.5, 0),
+							enemies, allies, retreat, brain.side, geometry, peek)
+					end
+					brain.pathGoal, brain.waypoints = nil, {}
+					move(model, h, root, brain.destination, roster)
+				else
+					-- Search only a remembered location; patrol fixed map objectives when it goes cold.
+					local destination = known
+					if not destination then
+						destination = Rules.spawn(if id == "Red" then "Blue" else "Red", brain.patrol).Position
+					end
+					if (root.Position - destination).Magnitude < 5 then
+						brain.lastSeenAt = -math.huge
+						brain.patrol = brain.patrol % Rules.TeamSize + 1
+					end
+					navigate(model, h, root, brain, destination, roster, now)
+				end
+				brain.mode = mode
+				model:SetAttribute("BotTactic", if retreat and known then "Retreat" else if visible then "Engage" else if known then "Search" else "Patrol")
+				if visible and targetRoot then
 					h.AutoRotate = false
 					local flat = Vector3.new(targetRoot.Position.X, root.Position.Y, targetRoot.Position.Z)
 					if (flat - root.Position).Magnitude > 0.1 then root.CFrame = CFrame.lookAt(root.Position, flat) end
-					move(model, h, root, if distance > 35 then targetRoot.Position else root.Position, roster)
-					if now >= brain.nextShot then
-						local tool = model:FindFirstChildOfClass("Tool")
-						if not tool then continue end
-						if (tool:GetAttribute("Ammo") or 0) <= 0 then
-							if not brain.reloading then brain.reloading = now + Weapons[1].ReloadTime end
-							if now >= brain.reloading then tool:SetAttribute("Ammo", Weapons[1].Magazine); brain.reloading = nil end
-							continue
-						end
+					if now >= brain.nextShot and tool and not brain.reloading then
 						brain.burst += 1
 						if brain.burst >= 3 then
 							brain.nextShot = now + random:NextNumber(0.8, 1.4)
@@ -120,25 +239,6 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 					end
 				else
 					h.AutoRotate = true
-					if now >= brain.nextPath and not brain.computing then
-						brain.nextPath, brain.computing = now + 2, true
-						local destination = targetRoot.Position
-						task.spawn(function()
-							local path = PathfindingService:CreatePath({ AgentRadius = 1.5, AgentHeight = 5, AgentCanJump = true, WaypointSpacing = 4 })
-							local ok = pcall(function() path:ComputeAsync(root.Position, destination) end)
-							if ok and path.Status == Enum.PathStatus.Success then
-								brain.waypoints, brain.waypoint = path:GetWaypoints(), 2
-								model:SetAttribute("PathFailed", false)
-							else model:SetAttribute("PathFailed", true) end
-							brain.computing = false
-						end)
-					end
-					local waypoint = brain.waypoints[brain.waypoint]
-					if waypoint then
-						if (root.Position - waypoint.Position).Magnitude < 3 then brain.waypoint += 1 end
-						h.Jump = waypoint.Action == Enum.PathWaypointAction.Jump
-						move(model, h, root, waypoint.Position, roster)
-					else move(model, h, root, targetRoot.Position, roster) end
 				end
 			end
 		end

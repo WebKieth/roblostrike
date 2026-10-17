@@ -46,6 +46,7 @@ class SessionTests(unittest.TestCase):
 
     def test_bots_yield_without_pushing_or_retreating_into_walls(self):
         fixture = (ROOT / 'tools/tests/fixtures/bot_spacing.luau').read_text()
+        fixture = fixture.replace('-- TACTICS_MODULE_HERE', (ROOT / 'src/server/BotTactics.luau').read_text())
         self.run_luau(fixture.replace('-- BOTS_MODULE_HERE', (ROOT / 'src/server/Bots.luau').read_text()))
 
     def test_all_six_spawns_are_spread_inside_rooms(self):

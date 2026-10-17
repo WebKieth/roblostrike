@@ -195,12 +195,15 @@ if scenario=="no_bots" then
 	choose:Fire(admin,"Blue")
 	assert(spawnCount==0 and not state:GetAttribute("Started"), "team choice cannot bypass setup")
 	setup:Fire(admin,"Start")
-	assert(state:GetAttribute("SetupError") and state:GetAttribute("Phase")=="Lobby", "no-bot game needs both teams")
+	assert(state:GetAttribute("Started") and state:GetAttribute("Phase")=="Freeze" and spawnCount==1, "solo no-bot start")
+	tick(3.1); tick(60)
+	assert(state:GetAttribute("Phase")=="Combat" and state:GetAttribute("BlueWins")==0, "empty opponent does not end round")
+	menu:Fire(admin,true)
 	choose:Fire(friend,"Red")
 	setup:Fire(friend,"Start")
-	assert(state:GetAttribute("Phase")=="Lobby", "non-admin cannot launch")
-	setup:Fire(admin,"Start")
-	assert(state:GetAttribute("Started") and state:GetAttribute("Phase")=="Freeze" and spawnCount==2)
+	assert(spawnCount==1, "non-admin cannot launch")
+	setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Started") and state:GetAttribute("Phase")=="Freeze" and spawnCount==3)
 	for _,roster in capturedSlots do
 		for _,s in roster do if not s.player then assert(not s.model, "no filler bots") end end
 	end
@@ -212,16 +215,17 @@ if scenario=="no_bots" then
 	players.PlayerRemoving:Fire(friend)
 	for _,s in capturedSlots.Red do assert(not s.player and not s.model, "no disconnect backfill") end
 	tick(.1); tick(4.1)
-	assert(state:GetAttribute("Phase")=="Lobby", "wait when one human team becomes empty")
+	assert(state:GetAttribute("Phase")=="Combat", "disconnect does not end sandbox")
 	local wins=state:GetAttribute("BlueWins")
+	admin.Character:FindFirstChildOfClass("Humanoid").Health=0
 	tick(30)
-	assert(state:GetAttribute("Phase")=="Lobby" and state:GetAttribute("BlueWins")==wins, "no empty-team win loop")
-	choose:Fire(add(101),"Red")
-	assert(state:GetAttribute("Phase")=="Freeze", "joining opponent resumes rounds")
+	assert(state:GetAttribute("Phase")=="Combat" and state:GetAttribute("BlueWins")==wins and state:GetAttribute("RedWins")==0, "all dead does not end sandbox")
+	menu:Fire(admin,true); setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Phase")=="Freeze" and admin.Character:FindFirstChildOfClass("Humanoid").Health==100, "manual restart respawns solo player")
 	assert(templateCount==0)
 	players.PlayerRemoving:Fire(admin)
 	assert(not state:GetAttribute("Started") and state:GetAttribute("BotsPerTeam")==3)
-	print("Session: human-only setup, validation, no backfill, and waiting/resume OK")
+	print("Session: solo sandbox, endless combat, no backfill, death and manual restart OK")
 	return
 elseif scenario=="restart" then
 	local function bots(id)
@@ -246,8 +250,10 @@ elseif scenario=="restart" then
 	assert(state:GetAttribute("PendingBotsPerTeam")==0 and state:GetAttribute("BotsPerTeam")==1)
 	local before=spawnCount
 	setup:Fire(admin,"Restart")
-	assert(spawnCount==before and state:GetAttribute("BlueWins")==3 and state:GetAttribute("SetupError"),
-		"invalid human-only restart leaves running session and score untouched")
+	assert(spawnCount==before+2 and state:GetAttribute("BlueWins")==0 and not state:GetAttribute("SetupError"),
+		"human-only restart accepts players on only one side")
+	menu:Fire(admin,true)
+	menu:Fire(friend,true)
 	choose:Fire(friend,"Blue")
 	local oldBots={}
 	for _,roster in capturedSlots do for _,s in roster do if s.model and not s.player then table.insert(oldBots,s.model) end end end
