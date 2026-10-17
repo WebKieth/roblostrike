@@ -9,6 +9,8 @@ local folder = Instance.new("Folder")
 folder.Name = "LocalBulletEffects"
 folder.Parent = workspace
 local marks: { Instance } = {}
+local muzzleFlashes: { Part } = {}
+local soundEmitters: { Part } = {}
 
 local function part(name: string, size: Vector3, frame: CFrame, color: Color3): Part
 	local p = Instance.new("Part")
@@ -20,7 +22,7 @@ local function part(name: string, size: Vector3, frame: CFrame, color: Color3): 
 	return p
 end
 
-function ShotEffects.flash(position: Vector3)
+function ShotEffects.flash(position: Vector3, followMuzzle: boolean?)
 	local flash = part("MuzzleFlash", Vector3.new(0.17, 0.17, 0.17), CFrame.new(position), Color3.fromRGB(255, 219, 130))
 	flash.Shape = Enum.PartType.Ball
 	flash.Material = Enum.Material.Neon
@@ -28,6 +30,45 @@ function ShotEffects.flash(position: Vector3)
 	light.Color, light.Brightness, light.Range = flash.Color, 2, 7
 	light.Parent = flash
 	Debris:AddItem(flash, 0.035)
+	if followMuzzle then table.insert(muzzleFlashes, flash) end
+end
+
+function ShotEffects.sound(position: Vector3, definition: any)
+	if not definition.ShotSound then return end
+	for i = #soundEmitters, 1, -1 do
+		if not soundEmitters[i].Parent then table.remove(soundEmitters, i) end
+	end
+	if #soundEmitters >= 32 then table.remove(soundEmitters, 1):Destroy() end
+	local emitter = part("ShotSoundEmitter", Vector3.new(0.1, 0.1, 0.1), CFrame.new(position), Color3.new(0, 0, 0))
+	emitter.Transparency = 1
+	table.insert(soundEmitters, emitter)
+	-- Separate instances allow rapid shots to overlap instead of restarting
+	-- one shared sound. A world emitter gives other players spatial audio.
+	local sound = Instance.new("Sound")
+	sound.Name = "Gunshot"
+	sound.SoundId = definition.ShotSound
+	sound.Volume = definition.ShotVolume or 0.7
+	sound.PlaybackSpeed = definition.ShotPlaybackSpeed or 1
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 8
+	sound.RollOffMaxDistance = 180
+	sound.Parent = emitter
+	sound.Ended:Once(function() emitter:Destroy() end)
+	Debris:AddItem(emitter, 5)
+	sound:Play()
+end
+
+-- A local flash lives for several frames: keep it on the moving gun, not
+-- suspended at the previous frame's world position while the player runs.
+function ShotEffects.updateMuzzle(position: Vector3)
+	for i = #muzzleFlashes, 1, -1 do
+		local flash = muzzleFlashes[i]
+		if flash.Parent then
+			flash.CFrame = CFrame.new(position)
+		else
+			table.remove(muzzleFlashes, i)
+		end
+	end
 end
 
 local function response(material: Enum.Material): (string, Color3, number)

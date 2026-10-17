@@ -5,6 +5,7 @@ local RunService = game:GetService("RunService")
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
 local Style = require(ReplicatedStorage.Shared.PoliceStyle)
 local GunModel = require(ReplicatedStorage.Shared.GunModel)
+local Effects = require(script.Parent.ShotEffects)
 
 local Viewmodel = {}
 
@@ -46,6 +47,7 @@ function Viewmodel.start(player: Player, combat: any)
 	local rightGlove: Part? = nil
 	local leftGlove: Part? = nil
 	local currentTool: Tool? = nil
+	local grenadePose: CFrame? = nil
 
 	local function clear()
 		if model then
@@ -54,11 +56,12 @@ function Viewmodel.start(player: Player, combat: any)
 		model, weapon, rightArm, leftArm = nil, nil, nil, nil
 		rightGlove, leftGlove = nil, nil
 		currentTool = nil
+		grenadePose = nil
 		combat.Muzzle = nil
 	end
 	player.CharacterRemoving:Connect(clear)
 
-	RunService:BindToRenderStep("RobostrikeViewmodel", Enum.RenderPriority.Camera.Value + 2, function()
+	RunService:BindToRenderStep("RobostrikeViewmodel", Enum.RenderPriority.Camera.Value + 2, function(dt)
 		local character = player.Character
 		local camera = workspace.CurrentCamera
 		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
@@ -110,32 +113,28 @@ function Viewmodel.start(player: Player, combat: any)
 			end
 		end
 		local moving = humanoid.MoveDirection.Magnitude > 0.05
-		local bob = if moving then math.sin(os.clock() * humanoid.WalkSpeed * 0.55) * 0.025 else 0
+		local bob = if moving then math.sin(os.clock() * humanoid.WalkSpeed * 0.55) * 0.075 else 0
 		local base = camera.CFrame * CFrame.new(0, bob, 0)
 		local weaponFrame = base * definition.View
+		if definition.Knife then
+			weaponFrame *= combat.KnifePose or CFrame.identity
+		end
+		if definition.Grenade then
+			local hip = tool:GetAttribute("GrenadeHip") == true
+			local winding = tool:GetAttribute("GrenadeWinding") == true
+			local pose = if winding then
+				(if hip then CFrame.new(0.65, -1.15, -0.7) * CFrame.Angles(math.rad(-35), 0, 0)
+				else CFrame.new(0.7, -0.35, -0.55) * CFrame.Angles(math.rad(65), 0, math.rad(-15)))
+				else definition.View
+			local smoothed = (grenadePose or definition.View):Lerp(pose, 1 - math.exp(-dt * 16))
+			grenadePose = smoothed
+			weaponFrame = base * smoothed
+		end
 		if definition.FireInterval then
-			-- Sight line, sway, recoil and HUD all use Combat's one aim frame.
-			local aim = combat.Aim
-			local translation = definition.View.Position:Lerp(definition.ADS.Position, combat.ADS)
-			local position = aim:PointToWorldSpace(translation)
-			local filter = RaycastParams.new()
-			filter.FilterDescendantsInstances = { character :: Model, camera }
-			filter.IgnoreWater = true
-			local result = workspace:Raycast(aim.Position, aim.LookVector * definition.Range, filter)
-			local target = if result then result.Position else aim.Position + aim.LookVector * definition.Range
-			if (target - aim.Position).Magnitude < 3 then
-				target = aim.Position + aim.LookVector * 50
-			end
-			local sightOrigin = position + aim.UpVector * definition.SightHeight
-			local rotation = CFrame.lookAt(sightOrigin, target, aim.UpVector).Rotation
-			weaponFrame = CFrame.new(position) * rotation
-			-- Rearward slide stays on the sight line instead of tilting the
-			-- gun away from the reticle independently of ballistic recoil.
-			weaponFrame *= CFrame.new(0, 0, combat.Kick * 0.07)
-			if tool:GetAttribute("Reloading") then
-				weaponFrame *= CFrame.new(0.15, -0.35, 0.15) * CFrame.Angles(0, 0, math.rad(-25))
-			end
+			-- Combat already resolved cover, reticle and firing from this pose.
+			weaponFrame = combat.WeaponFrame
 			combat.Muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle)
+			Effects.updateMuzzle(combat.Muzzle)
 		end
 		if weapon then
 			weapon:PivotTo(weaponFrame)

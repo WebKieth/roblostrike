@@ -72,21 +72,33 @@ function GunModel.build(handle: BasePart, slot: number, anchored: boolean)
 		block("RearSightBase", Vector3.new(0.25, 0.055, 0.12), CFrame.new(0, 0.19, 0.37), metal)
 		block("FrontSightTower", Vector3.new(0.08, 0.21, 0.09), CFrame.new(0, 0.105, -1.45), metal)
 		block("FrontSightPost", Vector3.new(0.025, 0.12, 0.035), CFrame.new(0, 0.22, -1.45), black)
-	else
-		block("LugerReceiver", Vector3.new(0.23, 0.24, 0.54), CFrame.new(0, 0, 0.1), metal)
-		barrel("LugerBarrel", 0.065, 0.83, -0.62, metal)
-		barrel("LugerMuzzle", 0.085, 0.1, -1.04, metal)
-		barrel("Bore", 0.045, 0.012, -1.096, Color3.new(0, 0, 0))
-		block("Grip", Vector3.new(0.23, 0.65, 0.3), CFrame.new(0, -0.36, 0.28) * CFrame.Angles(math.rad(-25), 0, 0), black)
-		for _, x in { -0.126, 0.126 } do
-			block("WoodGripPanel", Vector3.new(0.025, 0.48, 0.22), CFrame.new(x, -0.35, 0.28) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(89, 57, 38))
-			block("ToggleKnob", Vector3.new(0.07, 0.13, 0.13), CFrame.new(x, 0.12, 0.18), metal, true)
-			block("RearNotch", Vector3.new(0.04, 0.09, 0.07), CFrame.new(x * 0.65, 0.2, 0.33), black)
+	elseif slot == 2 then
+		-- Glock 17: squared steel slide over a polymer frame, no exposed
+		-- Luger barrel/toggle. All parts share the same authored bore axis.
+		block("GlockSlide", Vector3.new(0.3, 0.28, 1.34), CFrame.new(0, 0.04, -0.28), metal)
+		block("PolymerFrame", Vector3.new(0.32, 0.16, 1.14), CFrame.new(0, -0.17, -0.19), black)
+		block("DustCover", Vector3.new(0.27, 0.12, 0.5), CFrame.new(0, -0.26, -0.58), black)
+		barrel("BarrelCrown", 0.075, 0.035, -0.96, steel)
+		barrel("Bore", 0.047, 0.012, -0.985, Color3.new(0, 0, 0))
+		block("EjectionPort", Vector3.new(0.012, 0.12, 0.27), CFrame.new(0.155, 0.07, -0.18), black)
+		block("Chamber", Vector3.new(0.014, 0.07, 0.19), CFrame.new(0.163, 0.07, -0.18), steel)
+		local grip = CFrame.new(0, -0.48, 0.23) * CFrame.Angles(math.rad(-18), 0, 0)
+		block("PolymerGrip", Vector3.new(0.29, 0.65, 0.35), grip, black)
+		block("MagazineBase", Vector3.new(0.33, 0.07, 0.39), grip * CFrame.new(0, -0.34, 0), black)
+		for _, side in { -1, 1 } do
+			for i = 0, 5 do
+				block("SlideSerration", Vector3.new(0.012, 0.19, 0.018), CFrame.new(side * 0.155, 0.035, 0.12 + i * 0.04), black)
+			end
+			block("RearSightWing", Vector3.new(0.045, 0.09, 0.08), CFrame.new(side * 0.085, 0.225, 0.27), black)
+			block("RearSightMark", Vector3.new(0.025, 0.04, 0.012), CFrame.new(side * 0.085, 0.235, 0.315), Color3.fromRGB(235, 235, 225))
+			block("TriggerGuardSide", Vector3.new(0.045, 0.05, 0.39), CFrame.new(side * 0.12, -0.45, -0.09), black)
 		end
-		block("Toggle", Vector3.new(0.15, 0.12, 0.32), CFrame.new(0, 0.11, 0.06), metal)
-		block("FrontPost", Vector3.new(0.025, 0.13, 0.06), CFrame.new(0, 0.155, -0.97), black)
-		block("Trigger", Vector3.new(0.04, 0.16, 0.05), CFrame.new(0, -0.21, -0.06), steel)
-		block("TriggerGuard", Vector3.new(0.06, 0.04, 0.32), CFrame.new(0, -0.31, 0.03), metal)
+		block("RearSightBase", Vector3.new(0.22, 0.04, 0.09), CFrame.new(0, 0.19, 0.27), black)
+		block("FrontSightPost", Vector3.new(0.035, 0.1, 0.055), CFrame.new(0, 0.22, -0.83), black)
+		block("FrontSightMark", Vector3.new(0.022, 0.035, 0.008), CFrame.new(0, 0.24, -0.799), Color3.fromRGB(235, 235, 225))
+		block("Trigger", Vector3.new(0.045, 0.18, 0.055), CFrame.new(0, -0.32, -0.05), black)
+		block("TriggerSafety", Vector3.new(0.018, 0.12, 0.012), CFrame.new(0, -0.32, -0.084), steel)
+		block("TriggerGuardFront", Vector3.new(0.27, 0.22, 0.045), CFrame.new(0, -0.36, -0.29), black)
 	end
 end
 

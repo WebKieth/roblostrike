@@ -64,9 +64,14 @@ local function canStand(state: State): boolean
 end
 
 function Movement.step(_dt: number)
-	for _, state in states do
+	for player, state in states do
 		local humanoid = state.humanoid
 		if humanoid.Health <= 0 or not state.character.Parent then
+			continue
+		end
+		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then
+			humanoid.WalkSpeed = 0
+			humanoid.Jump = false
 			continue
 		end
 		local crouching = state.wantsCrouch or (state.crouching and not canStand(state))

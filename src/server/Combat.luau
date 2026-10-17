@@ -3,7 +3,41 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Weapons = require(ReplicatedStorage.Shared.Weapons)
+local Ballistics = require(ReplicatedStorage.Shared.Ballistics)
+local Survival = require(ReplicatedStorage.Shared.Survival)
+local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local Combat = {}
+
+function Combat.feedback(event: RemoteEvent, source: Model?, position: Vector3, damage: number)
+	-- Damage numbers belong to the attacker, never to other clients or bot AI.
+	local attacker = if source then Players:GetPlayerFromCharacter(source) else nil
+	if attacker then event:FireClient(attacker, position, damage) end
+end
+
+-- Shared by bullets and knife contacts: identical zones, armor wear and feedback.
+function Combat.damage(hit: RaycastResult, multiplier: number?, damageNumbers: RemoteEvent, source: Model?): Humanoid?
+	local ancestor: Instance? = hit.Instance
+	local victim: Humanoid? = nil
+	while ancestor and ancestor ~= workspace do
+		if ancestor:IsA("Model") then
+			victim = ancestor:FindFirstChildOfClass("Humanoid")
+			if victim then break end
+		end
+		ancestor = ancestor.Parent
+	end
+	if victim and victim.Health > 0 then
+		local body = victim.Parent :: Model
+		if Rules.friendly(source, body) then return nil end
+		local damage, armor = Survival.damage(hit.Instance.Name,
+			body:GetAttribute("Armor") or 0, body:GetAttribute("Helmet") == true, multiplier)
+		body:SetAttribute("Armor", armor)
+		if armor == 0 then body:SetAttribute("Helmet", false) end
+		if not body:GetAttribute("Immortal") then victim:TakeDamage(damage) end
+		local head = body:FindFirstChild("Head") :: BasePart?
+		Combat.feedback(damageNumbers, source, if head then head.Position else hit.Position, damage)
+	end
+	return victim
+end
 
 local function finiteVector(value: any): boolean
 	return typeof(value) == "Vector3"
@@ -20,11 +54,13 @@ function Combat.start(remotes: Folder)
 	local fire = remote("FireShot")
 	local reload = remote("ReloadWeapon")
 	local effects = remote("ShotEffect")
+	local damageNumbers = remote("DamageNumber")
 	local nextShot: { [Player]: number } = {}
 	local lastRequest: { [Player]: number } = {}
 	local reloadTokens: { [Tool]: number } = setmetatable({}, { __mode = "k" }) :: any
 
 	local function equipped(player: Player): (Model?, Tool?, any)
+		if Rules.blocked(player) then return nil, nil, nil end
 		local character = player.Character
 		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 		local tool = if character then character:FindFirstChildOfClass("Tool") else nil
@@ -36,14 +72,14 @@ function Combat.start(remotes: Folder)
 		return character, tool, definition
 	end
 
-	fire.OnServerEvent:Connect(function(player: Player, origin: any, direction: any)
+	fire.OnServerEvent:Connect(function(player: Player, muzzleOffset: any, direction: any)
 		local now = os.clock()
 		-- Cheap flood guard before raycasts and ancestry work.
 		if now - (lastRequest[player] or -math.huge) < 0.025 then
 			return
 		end
 		lastRequest[player] = now
-		if not finiteVector(origin) or not finiteVector(direction) or math.abs(direction.Magnitude - 1) > 0.01 then
+		if not finiteVector(muzzleOffset) or not finiteVector(direction) or math.abs(direction.Magnitude - 1) > 0.01 then
 			return
 		end
 		local character, tool, definition = equipped(player)
@@ -52,7 +88,7 @@ function Combat.start(remotes: Folder)
 		end
 		local head = character:FindFirstChild("Head") :: BasePart?
 		local handle = tool:FindFirstChild("Handle") :: BasePart?
-		if not head or not handle or (origin - head.Position).Magnitude > 2.5 then
+		if not head or not handle or muzzleOffset.Magnitude > Ballistics.MaxMuzzleOffset then
 			return
 		end
 		local ammo = tool:GetAttribute("Ammo")
@@ -68,46 +104,24 @@ function Combat.start(remotes: Folder)
 		params.FilterType = Enum.RaycastFilterType.Exclude
 		params.FilterDescendantsInstances = { character }
 		params.IgnoreWater = true
-		local offset = origin - head.Position
-		if offset.Magnitude > 0.01 and workspace:Raycast(head.Position, offset, params) then
-			return -- A camera position behind a wall must never shoot through it.
-		end
 		nextShot[player] = math.max(now, due) + definition.FireInterval
 		tool:SetAttribute("Ammo", ammo - 1)
 		direction = direction.Unit
-		-- The camera ray is exactly the displayed reticle, never a random cone.
-		local hit = workspace:Raycast(origin, direction * definition.Range, params)
-		local target = if hit then hit.Position else origin + direction * definition.Range
-		local muzzle = handle.CFrame:PointToWorldSpace(definition.Muzzle)
-		-- Occluded barrels/nearby cover take priority over the screen-space target.
-		-- Start at the head too, so a model clipped THROUGH a wall cannot bypass it.
-		local obstruction = workspace:Raycast(head.Position, muzzle - head.Position, params)
+		-- The first-person barrel, not the independently animated world Tool.
+		local muzzle = head.Position + muzzleOffset
+		local obstruction = if muzzleOffset.Magnitude > 0.001
+			then workspace:Raycast(head.Position, muzzle - head.Position, params) else nil
+		local hit: RaycastResult? = nil
 		if obstruction then
 			muzzle = head.Position
 			hit = obstruction
 		else
-			local path = target - muzzle
-			if path.Magnitude > 0.001 then
-				local barrelHit = workspace:Raycast(muzzle, path.Unit * (path.Magnitude + 0.02), params)
-				if barrelHit then
-					hit = barrelHit
-				end
-			end
+			hit = workspace:Raycast(muzzle, direction * definition.Range, params)
 		end
-		target = if hit then hit.Position else target
+		local target = if hit then hit.Position else muzzle + direction * definition.Range
 		local victim: Humanoid? = nil
 		if hit then
-			local ancestor: Instance? = hit.Instance
-			while ancestor and ancestor ~= workspace do
-				if ancestor:IsA("Model") then
-					victim = ancestor:FindFirstChildOfClass("Humanoid")
-					if victim then break end
-				end
-				ancestor = ancestor.Parent
-			end
-			if victim and victim.Health > 0 then
-				victim:TakeDamage(definition.Damage * (if hit.Instance.Name == "Head" then 2 else 1))
-			end
+			victim = Combat.damage(hit, definition.DamageMultiplier, damageNumbers, character)
 		end
 		local material = if hit then hit.Material else nil
 		if hit and hit.Instance.Parent and hit.Instance.Parent.Name == "Water" then
@@ -120,7 +134,8 @@ function Combat.start(remotes: Folder)
 
 	reload.OnServerEvent:Connect(function(player: Player)
 		local character, tool, definition = equipped(player)
-		if not character or not tool or tool:GetAttribute("Reloading") or tool:GetAttribute("Ammo") == definition.Magazine then
+		if not character or not tool or tool:GetAttribute("Reloading") or tool:GetAttribute("Ammo") == definition.Magazine
+			or (tool:GetAttribute("ReserveAmmo") or 0) <= 0 then
 			return
 		end
 		local token = (reloadTokens[tool] or 0) + 1
@@ -141,7 +156,10 @@ function Combat.start(remotes: Folder)
 			tool:SetAttribute("Reloading", false)
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
 			if player.Character == character and humanoid and humanoid.Health > 0 and tool.Parent == character then
-				tool:SetAttribute("Ammo", definition.Magazine)
+				local reserve = tool:GetAttribute("ReserveAmmo") or 0
+				local transfer = math.min(definition.Magazine - (tool:GetAttribute("Ammo") or 0), reserve)
+				tool:SetAttribute("ReserveAmmo", reserve - transfer)
+				tool:SetAttribute("Ammo", (tool:GetAttribute("Ammo") or 0) + transfer)
 			end
 		end)
 	end)

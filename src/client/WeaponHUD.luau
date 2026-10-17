@@ -12,6 +12,27 @@ function HUD.new(playerGui: PlayerGui)
 	gui.ResetOnSpawn = false
 	gui.DisplayOrder = 10
 	gui.Parent = playerGui
+	local vitals = Instance.new("TextLabel")
+	vitals.Name = "Vitals"
+	vitals.Position = UDim2.new(0, 16, 1, -55)
+	vitals.Size = UDim2.fromOffset(320, 35)
+	vitals.BackgroundTransparency = 1
+	vitals.TextColor3 = Color3.fromRGB(232, 239, 244)
+	vitals.TextStrokeTransparency = 0.4
+	vitals.TextXAlignment = Enum.TextXAlignment.Left
+	vitals.Font = Enum.Font.GothamMedium
+	vitals.TextSize = 18
+	vitals.Parent = gui
+	local player = game:GetService("Players").LocalPlayer
+	game:GetService("RunService").Heartbeat:Connect(function()
+		local character = player.Character
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		vitals.Visible = humanoid ~= nil and humanoid.Health > 0
+		if humanoid and character then
+			vitals.Text = string.format("HP %d   БРОНЯ %d%s", math.ceil(humanoid.Health),
+				character:GetAttribute("Armor") or 0, if character:GetAttribute("Helmet") then " + КАСКА" else "")
+		end
+	end)
 
 	local panel = Instance.new("Frame")
 	panel.Name = "WeaponSelector"
@@ -27,6 +48,7 @@ function HUD.new(playerGui: PlayerGui)
 
 	local rows: { TextLabel } = {}
 	for slot, definition in Weapons do
+		if slot > 4 then continue end
 		local row = Instance.new("TextLabel")
 		row.Name = "Slot" .. slot
 		row.Position = UDim2.fromOffset(8, 8 + (slot - 1) * 50)
@@ -35,7 +57,7 @@ function HUD.new(playerGui: PlayerGui)
 		row.Font = Enum.Font.GothamMedium
 		row.TextSize = 16
 		row.TextXAlignment = Enum.TextXAlignment.Left
-		row.Text = string.format("  %d    %s", slot, definition.ModelName)
+		row.Text = string.format("  %d    %s", slot, if slot == 4 then "Гранаты 38 / 69" else definition.ModelName)
 		row.Parent = panel
 		local rowCorner = Instance.new("UICorner")
 		rowCorner.CornerRadius = UDim.new(0, 4)

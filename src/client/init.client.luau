@@ -7,6 +7,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local SessionRules = require(ReplicatedStorage.Shared.SessionRules)
 local HUD = require(script.WeaponHUD)
 local Viewmodel = require(script.Viewmodel)
 local Animation = require(script.CharacterAnimation)
@@ -14,6 +15,7 @@ local player = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local equip = remotes:WaitForChild("EquipWeapon") :: RemoteEvent
 local movement = remotes:WaitForChild("SetMovement") :: RemoteEvent
+local drop = remotes:WaitForChild("DropWeapon") :: RemoteEvent
 
 local hud = HUD.new(player:WaitForChild("PlayerGui") :: PlayerGui)
 player.CameraMode = Enum.CameraMode.LockFirstPerson
@@ -48,9 +50,10 @@ local function resetMovement()
 end
 
 local function selectSlot(slot: number)
+	if SessionRules.blocked(player) then return end
 	local character = player.Character
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
-	if not humanoid or humanoid.Health <= 0 or slot == selectedSlot then
+	if not humanoid or humanoid.Health <= 0 or (slot == selectedSlot and slot ~= 4) then
 		return
 	end
 	if os.clock() - lastSelection < 0.08 then
@@ -85,6 +88,12 @@ end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.LeftShift, Enum.
 	Enum.KeyCode.RightControl)
 
 local slotKeys = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four }
+ContextActionService:BindAction("RobostrikeDrop", function(_, state)
+	if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+	if state == Enum.UserInputState.Begin and not SessionRules.blocked(player) then drop:FireServer() end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.G)
+
 ContextActionService:BindActionAtPriority("RobostrikeWeapons", function(_, state, input)
 	if UserInputService:GetFocusedTextBox() then
 		return Enum.ContextActionResult.Pass
@@ -104,7 +113,7 @@ UserInputService.InputChanged:Connect(function(input, processed)
 	end
 	if input.UserInputType == Enum.UserInputType.MouseWheel and input.Position.Z ~= 0 then
 		local direction = if input.Position.Z > 0 then -1 else 1
-		selectSlot((selectedSlot - 1 + direction) % 4 + 1)
+		selectSlot((selectedSlot - 1 + direction) % #slotKeys + 1)
 	end
 end)
 UserInputService.WindowFocusReleased:Connect(resetMovement)
@@ -137,7 +146,11 @@ if player.Character then
 	task.spawn(onCharacter, player.Character)
 end
 local combat = require(script.Combat).start(player)
+require(script.Knife).start(player, combat)
+require(script.Grenades).start(player)
+require(script.DamageNumbers).start()
 Viewmodel.start(player, combat)
+task.spawn(require(script.SessionHUD).start, player)
 
 task.spawn(function()
 	local folder = workspace:WaitForChild("FyPoolDay"):WaitForChild("Water")

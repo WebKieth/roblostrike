@@ -12,6 +12,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Loadout = require(script.Loadout)
 local movement = require(script.Movement)
 local PoliceSkin = require(script.PoliceSkin)
+local Survival = require(ReplicatedStorage.Shared.Survival)
+local SessionRules = require(ReplicatedStorage.Shared.SessionRules)
 
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
@@ -23,6 +25,8 @@ local stance = Instance.new("RemoteEvent")
 stance.Name = "SetMovement"
 stance.Parent = remotes
 require(script.Combat).start(remotes)
+require(script.Knife).start(remotes)
+require(script.Grenades).start(remotes)
 
 PhysicsService:RegisterCollisionGroup("Characters")
 PhysicsService:CollisionGroupSetCollidable("Characters", "Characters", false)
@@ -36,6 +40,8 @@ for _, descendant in map:GetDescendants() do
 		descendant.CanQuery = false
 	end
 end
+
+require(script.Loot).start(remotes)
 
 local roomSpawn = Instance.new("SpawnLocation")
 roomSpawn.Name = "BlueRoomRespawn"
@@ -54,8 +60,7 @@ local spawning: { [Player]: boolean } = {}
 local lastEquip: { [Player]: number } = {}
 local pendingEquip: { [Player]: number } = {}
 
-local spawnCharacter: (Player) -> ()
-spawnCharacter = function(player: Player)
+local function spawnCharacter(player: Player, spawnAt: CFrame): Model?
 	if spawning[player] or player.Parent ~= Players then
 		return
 	end
@@ -68,7 +73,6 @@ spawnCharacter = function(player: Player)
 	if not success then
 		spawning[player] = nil
 		warn("[Robostrike] Character creation failed: " .. tostring(result))
-		task.delay(Config.RespawnDelay, spawnCharacter, player)
 		return
 	end
 	local character = result :: Model
@@ -88,7 +92,7 @@ spawnCharacter = function(player: Player)
 	PoliceSkin.apply(character)
 	root.Anchored = true
 	-- Exact root placement BEFORE entering Workspace; no MoveTo/ceiling raycasts.
-	character:PivotTo(Config.SpawnCFrame * root.CFrame:Inverse() * character:GetPivot())
+	character:PivotTo(spawnAt * root.CFrame:Inverse() * character:GetPivot())
 	for _, descendant in character:GetDescendants() do
 		if descendant:IsA("BasePart") then
 			descendant.CollisionGroup = "Characters"
@@ -99,6 +103,10 @@ spawnCharacter = function(player: Player)
 		Instance.new("Animator", humanoid)
 	end
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.MaxHealth = Survival.MaxHealth
+	humanoid.Health = Survival.MaxHealth
+	character:SetAttribute("Armor", 0)
+	character:SetAttribute("Helmet", false)
 	humanoid.WalkSpeed = Config.RunSpeed
 	humanoid.UseJumpPower = true
 	humanoid.JumpPower = 35
@@ -118,11 +126,12 @@ spawnCharacter = function(player: Player)
 	spawning[player] = nil
 	humanoid.Died:Once(function()
 		movement.remove(player)
-		task.delay(Config.RespawnDelay, spawnCharacter, player)
 	end)
+	return character
 end
 
 equip.OnServerEvent:Connect(function(player: Player, slot: any)
+	if SessionRules.blocked(player) then return end
 	if typeof(slot) ~= "number" or slot % 1 ~= 0 or slot < 1 or slot > 4 then
 		return
 	end
@@ -140,6 +149,7 @@ RunService.Heartbeat:Connect(function(dt)
 	movement.step(dt)
 	local now = os.clock()
 	for player, slot in pendingEquip do
+		if SessionRules.blocked(player) then pendingEquip[player] = nil; continue end
 		if now - (lastEquip[player] or 0) >= 0.06 then
 			pendingEquip[player] = nil
 			lastEquip[player] = now
@@ -150,7 +160,7 @@ end)
 
 local function onPlayerAdded(player: Player)
 	player.RespawnLocation = roomSpawn
-	task.spawn(spawnCharacter, player)
+	Loadout.watch(player)
 end
 Players.PlayerAdded:Connect(onPlayerAdded)
 Players.PlayerRemoving:Connect(function(player)
@@ -162,5 +172,7 @@ end)
 for _, player in Players:GetPlayers() do
 	onPlayerAdded(player)
 end
+
+require(script.Session).start(remotes, spawnCharacter)
 
 print(string.format("[%s] Server ready — v%s", Config.GameName, Config.Version))

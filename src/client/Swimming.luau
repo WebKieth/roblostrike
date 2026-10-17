@@ -44,7 +44,7 @@ function Swimming.start(player: Player, pools: { Water.Pool })
 			currentCharacter = character
 			cooldown = 0
 		end
-		if not character or not humanoid or not root or humanoid.Health <= 0 then
+		if not character or not humanoid or not root or humanoid.Health <= 0 or player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then
 			release()
 			return
 		end

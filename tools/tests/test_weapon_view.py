@@ -55,12 +55,19 @@ class WeaponViewTests(unittest.TestCase):
 
     def test_firearms_use_local_models(self):
         self.assertIn('ModelName = "M4A1"', self.slots[0])
+        self.assertIn('ModelName = "Glock 17"', self.slots[1])
+        self.assertIn('Magazine = 17', self.slots[1])
+        self.assertIn('Automatic = true', self.slots[0])
+        self.assertIn('Automatic = false', self.slots[1])
+        self.assertIn('SpreadMultiplier = 0.8', self.slots[0])
+        self.assertIn('SpreadMultiplier = 0.5', self.slots[1])
+        self.assertNotIn('9535', self.slots[1])
         self.assertNotIn('94287666', self.slots[0])
         for slot in self.slots[:2]:
             self.assertIn('Procedural = true', slot)
 
     def test_hand_anchors_for_all_slots_and_support_for_rifle(self):
-        self.assertEqual(len(self.slots), 4)
+        self.assertEqual(len(self.slots), 5)  # Two grenade Tools share hotbar key 4.
         for slot in self.slots:
             self.assertIn("RightHand = Vector3.new(", slot)
         self.assertIn("LeftHand = Vector3.new(", self.slots[0])

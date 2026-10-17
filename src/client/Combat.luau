@@ -16,8 +16,10 @@ function Combat.start(player: Player)
 	local fire = remotes:WaitForChild("FireShot") :: RemoteEvent
 	local reload = remotes:WaitForChild("ReloadWeapon") :: RemoteEvent
 	local effects = remotes:WaitForChild("ShotEffect") :: RemoteEvent
+	local equip = remotes:WaitForChild("EquipWeapon") :: RemoteEvent
 	local state = {
 		Aim = CFrame.identity,
+		WeaponFrame = CFrame.identity,
 		ADS = 0,
 		Kick = 0,
 		Muzzle = nil :: Vector3?,
@@ -66,10 +68,15 @@ function Combat.start(player: Player)
 	local held, aiming, queued = false, false, false
 	local currentTool: Tool? = nil
 	local carry, impulse = Vector2.zero, Vector2.zero
+	local dispersion = Vector2.zero
+	local random = Random.new()
 	local lastShot, nextShot, hitUntil = -math.huge, 0, 0
 	local index, phase, movement = 0, 0, 0
 	local defaultFov = 70
 	local lastCamera: Camera? = nil
+	local lastEquipRequest = 0
+	local recoilCamera: Camera? = nil
+	local cameraRotation = CFrame.identity
 	local function release()
 		held, aiming, queued = false, false, false
 	end
@@ -80,6 +87,7 @@ function Combat.start(player: Player)
 		release()
 		currentTool = nil
 		carry, impulse = Vector2.zero, Vector2.zero
+		dispersion = Vector2.zero
 		lastShot = -math.huge
 	end)
 	ContextActionService:BindActionAtPriority("RobostrikeCombat", function(_, inputState, input)
@@ -88,9 +96,10 @@ function Combat.start(player: Player)
 			return Enum.ContextActionResult.Sink
 		end
 		local pressed = inputState == Enum.UserInputState.Begin
+		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then release(); return Enum.ContextActionResult.Pass end
 		if pressed and UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			if pressed then held, queued = true, true
+			if pressed and not held then held, queued = true, true
 			elseif inputState == Enum.UserInputState.End then held = false end
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 			aiming = pressed
@@ -101,20 +110,30 @@ function Combat.start(player: Player)
 	end, false, Enum.ContextActionPriority.High.Value + 1,
 		Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.KeyCode.R)
 
-	effects.OnClientEvent:Connect(function(shooter: number, _slot: number, muzzle: Vector3, target: Vector3,
+	effects.OnClientEvent:Connect(function(shooter: number, slot: number, muzzle: Vector3, target: Vector3,
 		normal: Vector3?, material: Enum.Material?, hit: Instance?, flesh: boolean)
 		if shooter == player.UserId then
-			muzzle = state.Muzzle or muzzle
 			if flesh then hitUntil = os.clock() + 0.12 end
 		else
 			Effects.flash(muzzle)
+			Effects.tracer(muzzle, target)
+			local definition = Weapons[slot]
+			if definition then Effects.sound(muzzle, definition) end
 		end
-		Effects.tracer(muzzle, target)
 		if normal and material then Effects.impact(target, normal, material, hit, flesh) end
 	end)
 
-	-- After Roblox mouse look, before Viewmodel: one aim transform drives the
-	-- screen marker, gun sights AND the network ray. No post-ray random spread.
+	-- Remove only our presentation rotation before Roblox processes mouse look.
+	-- Otherwise last frame's camera kick feeds back and gets applied twice.
+	RunService:BindToRenderStep("RobostrikeRecoilCamera", Enum.RenderPriority.Camera.Value - 1, function()
+		if recoilCamera and recoilCamera == workspace.CurrentCamera then
+			recoilCamera.CFrame *= cameraRotation:Inverse()
+		end
+		recoilCamera = nil
+		cameraRotation = CFrame.identity
+	end)
+
+	-- Resolve this frame's gun pose BEFORE drawing the reticle or firing.
 	RunService:BindToRenderStep("RobostrikeCombat", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		local camera = workspace.CurrentCamera
 		if not camera then return end
@@ -125,6 +144,7 @@ function Combat.start(player: Player)
 		local character = player.Character
 		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 		local root = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+		local head = if character then character:FindFirstChild("Head") :: BasePart? else nil
 		local tool = if character then character:FindFirstChildOfClass("Tool") else nil
 		local slot = if tool then tool:GetAttribute("WeaponSlot") else nil
 		local definition = if typeof(slot) == "number" then Weapons[slot] else nil
@@ -135,13 +155,24 @@ function Combat.start(player: Player)
 			state.Muzzle = nil
 		end
 		local active = humanoid ~= nil and humanoid.Health > 0 and definition ~= nil and definition.FireInterval ~= nil
+			and not player:GetAttribute("SessionBlocked") and not player:GetAttribute("TeamMenuOpen")
 		state.Active = active
 		state.ADS += ((if active and aiming and tool and not tool:GetAttribute("Reloading") then 1 else 0) - state.ADS) * (1 - math.exp(-dt * 16))
 		camera.FieldOfView = defaultFov + (55 - defaultFov) * state.ADS
 		crosshair.Visible, status.Visible = active, active
-		if not active or not tool or not humanoid then
+		if not active or not tool or not humanoid or not head then
 			state.Aim = camera.CFrame
-			held, queued = false, false
+			held, aiming, queued = false, false, false
+			if humanoid and humanoid.Health > 0 and not tool then
+				status.Visible = true
+				status.Text = "Пустой слот — подойди к оружию"
+				-- Recover if Roblox clears/replaces the Backpack during spawn.
+				-- Request the real server Tool; never draw a fake gun without one.
+				if os.clock() - lastEquipRequest >= 1 then
+					lastEquipRequest = os.clock()
+					equip:FireServer(player:GetAttribute("SelectedSlot") or 1)
+				end
+			end
 			return
 		end
 		local speed = if root then (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude else 0
@@ -149,14 +180,60 @@ function Combat.start(player: Player)
 		if humanoid.FloorMaterial == Enum.Material.Air then amount = math.max(amount, 0.8) end
 		movement += (amount - movement) * (1 - math.exp(-dt * 12))
 		phase += dt * (6 + speed * 0.34)
-		local age = os.clock() - lastShot
+		local now = os.clock()
+		local age = now - lastShot
+		local reloading = tool:GetAttribute("Reloading") == true
+		local ammo = tool:GetAttribute("Ammo") or 0
+		local shooting = Ballistics.trigger(definition.Automatic == true, held, queued) and not reloading and ammo > 0 and now >= nextShot
+		if shooting then
+			-- Resolve randomness BEFORE pose, reticle and ray, including shot #1.
+			dispersion = Ballistics.dispersion(index + 1, age, random:NextNumber(), random:NextNumber())
+		end
 		local rise = math.clamp(age / 0.035, 0, 1)
 		rise = rise * rise * (3 - 2 * rise)
-		local recoil = (carry + impulse * rise) * Ballistics.recovery(age)
-		local offset = recoil + Ballistics.sway(phase, movement, state.ADS)
-		state.Aim = camera.CFrame * CFrame.Angles(offset.Y, -offset.X, 0)
+		local recoil = (carry + impulse * rise) * Ballistics.recoilWeight(age, definition.FireInterval)
+		local spreadScale = Ballistics.spreadScale(definition.SpreadMultiplier, state.ADS)
+		local dispersionWeight = if shooting then 1 else Ballistics.recoilWeight(age, definition.FireInterval)
+		-- Scale the whole current offset, not just the next impulse: entering
+		-- ADS halves even an already accumulated burst, with no threshold jump.
+		local offset = (recoil + Ballistics.sway(phase, movement, 0) + dispersion * dispersionWeight) * spreadScale
+		local basePitch, yaw, roll = camera.CFrame:ToOrientation()
+		local pitch, cameraLift = Ballistics.elevation(basePitch, offset.Y)
+		cameraRotation = CFrame.Angles(cameraLift, 0, 0)
+		recoilCamera = camera
+		camera.CFrame *= cameraRotation
+		state.Aim = CFrame.new(camera.CFrame.Position) * CFrame.fromOrientation(pitch, yaw - offset.X, roll)
 		state.Kick = math.max(0, 1 - age / 0.12)
-		local point = camera:WorldToViewportPoint(state.Aim.Position + state.Aim.LookVector * 1000)
+		local aim = state.Aim
+		local filter = RaycastParams.new()
+		filter.FilterDescendantsInstances = { character :: Model, camera }
+		filter.IgnoreWater = true
+		-- Converge the sights at distance, never twist the bore towards a nearby
+		-- camera hit. Close cover is resolved by the actual barrel ray below.
+		local sightHit = workspace:Raycast(aim.Position, aim.LookVector * definition.Range, filter)
+		local sightDistance = if sightHit then (sightHit.Position - aim.Position).Magnitude else definition.Range
+		local sightTarget = aim.Position + aim.LookVector * math.max(50, sightDistance)
+		local translation = definition.View.Position:Lerp(definition.ADS.Position, state.ADS)
+		local position = aim:PointToWorldSpace(translation)
+		local rotation = CFrame.lookAt(position + aim.UpVector * definition.SightHeight, sightTarget, aim.UpVector).Rotation
+		local weaponFrame = CFrame.new(position) * rotation * CFrame.new(0, 0, state.Kick * 0.21)
+		if tool:GetAttribute("Reloading") then
+			weaponFrame *= CFrame.new(0.15, -0.35, 0.15) * CFrame.Angles(0, 0, math.rad(-25))
+		end
+		local muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle)
+		local reach = muzzle - head.Position
+		local cover = if reach.Magnitude > 0.001 then workspace:Raycast(head.Position, reach, filter) else nil
+		if cover then
+			-- Pull the whole gun in front of cover without bending its barrel.
+			local safeMuzzle = cover.Position - reach.Unit * 0.2
+			weaponFrame += safeMuzzle - muzzle
+			muzzle = safeMuzzle
+		end
+		state.WeaponFrame, state.Muzzle = weaponFrame, muzzle
+		local direction = weaponFrame.LookVector
+		local barrelHit = workspace:Raycast(muzzle, direction * definition.Range, filter)
+		local target = if barrelHit then barrelHit.Position else muzzle + direction * definition.Range
+		local point = camera:WorldToViewportPoint(target)
 		crosshair.Position = UDim2.fromOffset(point.X, point.Y)
 		for n, line in lines do
 			-- Keep a tiny dot in ADS as a verifiable ballistic reference; the
@@ -166,22 +243,22 @@ function Combat.start(player: Player)
 			local stroke = line:FindFirstChildOfClass("UIStroke")
 			if stroke then stroke.Transparency = 0.4 + state.ADS * 0.6 end
 		end
-		local reloading = tool:GetAttribute("Reloading") == true
-		local ammo = tool:GetAttribute("Ammo") or 0
-		status.Text = string.format("%s   %d / %d\n%s", definition.ModelName, ammo, definition.Magazine,
-			if reloading then "Перезарядка…" else "ЛКМ — огонь  ·  ПКМ — прицел  ·  R — перезарядка")
+		status.Text = string.format("%s   %d / %d\n%s", definition.ModelName, ammo, tool:GetAttribute("ReserveAmmo") or 0,
+			if reloading then "Перезарядка…"
+			elseif definition.Automatic then "ЛКМ — огонь  ·  ПКМ — прицел  ·  R — перезарядка"
+			else "ЛКМ — одиночный  ·  ПКМ — прицел  ·  R — перезарядка")
 		status.TextSize = 15
-		local now = os.clock()
-		if (held or queued) and not reloading and ammo > 0 and now >= nextShot then
+		if shooting then
 			queued = false
 			nextShot = Ballistics.nextShot(now, nextShot, definition.FireInterval, dt)
-			-- Send the displayed direction BEFORE starting the next recoil kick.
-			fire:FireServer(state.Aim.Position, state.Aim.LookVector)
-			if state.Muzzle then Effects.flash(state.Muzzle) end
+			-- Head-relative positions are independent of character replication lag.
+			fire:FireServer(muzzle - head.Position, direction)
+			Effects.flash(muzzle, true)
+			Effects.tracer(muzzle, target)
+			Effects.sound(muzzle, definition)
 			index += 1
 			carry = recoil
-			impulse = Ballistics.kick(index, now - lastShot, definition.Recoil)
-			if state.ADS > 0.5 then impulse *= 0.65 end
+			impulse = Ballistics.kick(index, now - lastShot, 1)
 			lastShot = now
 		end
 	end)

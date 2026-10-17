@@ -107,6 +107,24 @@ function PoliceSkin.apply(character: Model)
 	piece("CapBand", head, Vector3.new(1.22, 0.18, 1.14), CFrame.new(0, 0.39, 0), Style.Leather, true)
 	piece("CapVisor", head, Vector3.new(1.25, 0.12, 0.86), CFrame.new(0, 0.34, -0.53), Style.Leather, true)
 	piece("CapBadge", head, Vector3.new(0.23, 0.27, 0.08), CFrame.new(0, 0.53, -0.61), Style.Gold, true)
+	local helmet = piece("ArmorHelmet", head, Vector3.new(1.55, 0.85, 1.5), CFrame.new(0, 0.42, 0), Style.Vest, true)
+	local armorParts = { BodyArmor = true, PoliceChestPatch = true, PoliceBackPatch = true, VestStrap = true, AmmoPouch = true }
+	local function updateArmor()
+		local armored = (character:GetAttribute("Armor") or 0) > 0
+		local helmeted = armored and character:GetAttribute("Helmet") == true
+		for _, part in outfit:GetChildren() do
+			if not part:IsA("BasePart") then continue end
+			if armorParts[part.Name] then part.Transparency = if armored then 0 else 1 end
+			if string.sub(part.Name, 1, 3) == "Cap" then part.Transparency = if helmeted then 1 else 0 end
+			for _, child in part:GetChildren() do
+				if child:IsA("SurfaceGui") and armorParts[part.Name] then child.Enabled = armored end
+			end
+		end
+		helmet.Transparency = if helmeted then 0 else 1
+	end
+	character:GetAttributeChangedSignal("Armor"):Connect(updateArmor)
+	character:GetAttributeChangedSignal("Helmet"):Connect(updateArmor)
+	updateArmor()
 end
 
 return PoliceSkin
