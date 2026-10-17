@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.env.*
+.tools/
+build/
+assets/source/
+__pycache__/
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxl.autosave
+*.rbxlx.autosave

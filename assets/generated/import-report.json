@@ -1,0 +1,46 @@
+{
+  "source": "fy_pool_day.bsp",
+  "source_sha256": "fb22ba78a20d762a7114bdd56d62ec01794695ac48c6777f1bbd676ab769d208",
+  "scale": 0.0625,
+  "faces_in_bsp": 2048,
+  "exported_surfaces": 1939,
+  "parts": {
+    "Part": 6173,
+    "WedgePart": 1330,
+    "SpawnLocation": 32
+  },
+  "spawn_count": 32,
+  "materials": {
+    "tile_white": 942,
+    "tile_red": 195,
+    "light": 32,
+    "tile_blue": 258,
+    "red_partition": 30,
+    "wood": 15,
+    "metal": 251,
+    "glass": 201,
+    "concrete": 5,
+    "water": 8,
+    "dark": 2
+  },
+  "bounds": {
+    "min": [
+      -56.0,
+      -13.75,
+      -96.0
+    ],
+    "max": [
+      40.0,
+      12.0,
+      32.0
+    ]
+  },
+  "limitations": [
+    "Static doors and buttons",
+    "Visual water only; no swimming",
+    "No weapons, sounds, lightmaps or CS game logic",
+    "Thin surface collision shells",
+    "Original texture pixels excluded; procedural replacement colors and tile grout",
+    "Source map geometry is not covered by replacement material permissions"
+  ]
+}
