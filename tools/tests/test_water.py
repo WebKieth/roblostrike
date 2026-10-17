@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = (ROOT / "src/shared/Water.luau").read_text()
+SWIMMING = (ROOT / "src/client/Swimming.luau").read_text()
 
 
 def setting(name):
@@ -72,6 +73,29 @@ class WaterTests(unittest.TestCase):
                 self.assertLessEqual(y, target + .01)
             self.assertAlmostEqual(y, target, places=3)
             self.assertLess(abs(velocity), .01)
+
+    def test_controller_source_uses_vertical_only_physics_constraint(self):
+        # Source contract only: actual Humanoid/solver interaction needs Studio.
+        self.assertIn('Instance.new("LinearVelocity")', SWIMMING)
+        self.assertIn('controller.RelativeTo = Enum.ActuatorRelativeTo.World', SWIMMING)
+        self.assertIn('controller.VelocityConstraintMode = Enum.VelocityConstraintMode.Line', SWIMMING)
+        self.assertIn('controller.LineDirection = Vector3.yAxis', SWIMMING)
+        self.assertIn('controller.ForceLimitsEnabled = false', SWIMMING)
+        self.assertIn('verticalVelocity.LineVelocity = vy', SWIMMING)
+        self.assertIn('if verticalVelocity then verticalVelocity:Destroy() end', SWIMMING)
+        self.assertNotIn('Instance.new("VectorForce")', SWIMMING)
+
+    def test_swimming_initializes_before_cosmetic_water(self):
+        client = (ROOT / "src/client/init.client.luau").read_text()
+        self.assertLess(client.index('require(script.Swimming).start'),
+                        client.index('require(script.WaterSurface).start'))
+
+    def test_submerged_controller_checks_held_space_each_step(self):
+        # The check must remain outside the water-entry initialization branch.
+        update = SWIMMING.split('humanoid.JumpPower = 0', 1)[1]
+        self.assertIn('UserInputService:IsKeyDown(Enum.KeyCode.Space)', update)
+        self.assertIn('UserInputService:GetFocusedTextBox() == nil', update)
+        self.assertIn('rising = true', update)
 
     def test_exit_impulse_has_small_bounded_apex(self):
         for height in (3.5, 4.9, 5.5):

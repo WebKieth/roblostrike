@@ -14,13 +14,13 @@ function Swimming.start(player: Player, pools: { Water.Pool })
 	local requested = false
 	local cooldown = 0
 	local currentCharacter: Model? = nil
-	local force: VectorForce? = nil
+	local verticalVelocity: LinearVelocity? = nil
 	local attachment: Attachment? = nil
 	local savedJump = 35
 	local function release()
-		if force then force:Destroy() end
+		if verticalVelocity then verticalVelocity:Destroy() end
 		if attachment then attachment:Destroy() end
-		force, attachment = nil, nil
+		verticalVelocity, attachment = nil, nil
 		if currentCharacter then
 			currentCharacter:SetAttribute("InWater", false)
 			local humanoid = currentCharacter:FindFirstChildOfClass("Humanoid")
@@ -62,15 +62,23 @@ function Swimming.start(player: Player, pools: { Water.Pool })
 		end
 		if not active then
 			active = true
+			-- Space may already be held when crossing the water surface.
+			rising = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+				and UserInputService:GetFocusedTextBox() == nil
 			savedJump = humanoid.JumpPower
 			attachment = Instance.new("Attachment")
 			attachment.Parent = root
-			local buoyancy = Instance.new("VectorForce")
-			buoyancy.Attachment0 = attachment
-			buoyancy.RelativeTo = Enum.ActuatorRelativeTo.World
-			buoyancy.ApplyAtCenterOfMass = true
-			buoyancy.Parent = root
-			force = buoyancy
+			-- Enforce vertical speed throughout the physics step, including when
+			-- the Humanoid is grounded on the pool floor. Leave WASD axes free.
+			local controller = Instance.new("LinearVelocity")
+			controller.Attachment0 = attachment
+			controller.RelativeTo = Enum.ActuatorRelativeTo.World
+			controller.VelocityConstraintMode = Enum.VelocityConstraintMode.Line
+			controller.LineDirection = Vector3.yAxis
+			controller.ForceLimitsEnabled = false
+			controller.LineVelocity = math.max(root.AssemblyLinearVelocity.Y / 4, -Settings.SinkSpeed)
+			controller.Parent = root
+			verticalVelocity = controller
 			character:SetAttribute("InWater", true)
 			-- Absorb entry momentum immediately instead of falling to the bottom first.
 			local v = root.AssemblyLinearVelocity
@@ -78,8 +86,13 @@ function Swimming.start(player: Player, pools: { Water.Pool })
 		end
 		humanoid.Jump = false
 		humanoid.JumpPower = 0
-		if requested then rising, requested = true, false end
-		if force then force.Force = Vector3.new(0, root.AssemblyMass * workspace.Gravity, 0) end
+		-- Check held input at any depth, not only on entry or a Begin event.
+		-- Keep rising latched after release so one press reaches the surface.
+		if requested or (UserInputService:IsKeyDown(Enum.KeyCode.Space)
+			and UserInputService:GetFocusedTextBox() == nil) then
+			rising = true
+		end
+		requested = false
 		local time = workspace:GetServerTimeNow()
 		local surface = Water.height(pool, root.Position.X, root.Position.Z, time)
 		local targetY = surface + Settings.SurfaceOffset + Settings.BobHeight * math.sin(time * 2.6)
@@ -95,7 +108,7 @@ function Swimming.start(player: Player, pools: { Water.Pool })
 		else
 			vy = velocity.Y + (-Settings.SinkSpeed - velocity.Y) * (1 - math.exp(-dt / 0.28))
 		end
-		root.AssemblyLinearVelocity = Vector3.new(velocity.X, vy, velocity.Z)
+		if verticalVelocity then verticalVelocity.LineVelocity = vy end
 		if not rising or math.abs(root.Position.Y - targetY) > 0.4 then return end
 		local direction = humanoid.MoveDirection * Vector3.new(1, 0, 1)
 		if direction.Magnitude < 0.1 then return end

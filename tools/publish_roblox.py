@@ -51,7 +51,21 @@ def main():
             raise ValueError("Roblox did not return a valid versionNumber; inspect Place Version History.")
     except HTTPError as error:
         # Do not print request headers, API key, or raw server responses.
-        print(f"Publish failed: Roblox HTTP {error.code}. Check key scope, IDs and access restrictions.", file=sys.stderr)
+        hints = {
+            401: "Check API key validity and expiration.",
+            403: "Check key Write scope, experience access and IP restrictions.",
+            404: "Check Universe ID, Place ID and key access to the experience.",
+            409: (
+                "Conflict while saving the place. Save any Studio edits locally, close active "
+                "editing sessions and check Team Create; it may conflict with Open Cloud publishing. "
+                "If enabled, turn Team Create off for this place. Wait a couple of minutes, "
+                "check Place Version History, then rerun the workflow. "
+                "Also verify that Place ID belongs to Universe ID. No automatic retry was made."
+            ),
+            429: "Roblox rate limit reached. Wait before trying again.",
+        }
+        hint = hints.get(error.code, "Check Roblox service status and Place Version History before retrying.")
+        print(f"Publish failed: Roblox HTTP {error.code}. {hint}", file=sys.stderr)
         return 1
     except (OSError, URLError, ValueError) as error:
         print(f"Publish failed: {error}", file=sys.stderr)

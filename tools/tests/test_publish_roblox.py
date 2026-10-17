@@ -76,6 +76,19 @@ class PublishTests(unittest.TestCase):
         self.assertIn("403", output.getvalue())
         self.assertNotIn("test-secret", output.getvalue())
 
+    def test_conflict_has_actionable_hint_without_retry_or_secret(self):
+        with patch.dict(publish.os.environ, self.env, clear=True), \
+             patch.object(publish.sys, "argv", ["publish", str(self.place)]), \
+             patch.object(publish, "urlopen", side_effect=publish.HTTPError(
+                 "url", 409, "test-secret", {}, io.BytesIO(b"test-secret"))) as opener, \
+             patch("sys.stderr", new_callable=io.StringIO) as output:
+            self.assertEqual(publish.main(), 1)
+        opener.assert_called_once()
+        self.assertIn("409", output.getvalue())
+        self.assertIn("Team Create", output.getvalue())
+        self.assertIn("Version History", output.getvalue())
+        self.assertNotIn("test-secret", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
