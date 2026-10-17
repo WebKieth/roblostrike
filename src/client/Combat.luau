@@ -207,10 +207,10 @@ function Combat.start(player: Player)
 		local rise = math.clamp(age / 0.035, 0, 1)
 		rise = rise * rise * (3 - 2 * rise)
 		local recoil = (carry + impulse * rise) * Ballistics.recoilWeight(age, definition.FireInterval)
-		local spreadScale = Ballistics.spreadScale(definition.SpreadMultiplier, state.ADS)
+		local spreadScale = Ballistics.spreadScale(definition.SpreadMultiplier, state.ADS, character:GetAttribute("Crouching") == true)
 		local dispersionWeight = if shooting then 1 else Ballistics.recoilWeight(age, definition.FireInterval)
 		-- Scale the whole current offset, not just the next impulse: entering
-		-- ADS halves even an already accumulated burst, with no threshold jump.
+		-- ADS halves even an already accumulated burst; crouching adds x0.8.
 		local offset = (recoil + Ballistics.sway(phase, movement, 0) + dispersion * dispersionWeight) * spreadScale
 		local basePitch, yaw, roll = camera.CFrame:ToOrientation()
 		local pitch, cameraLift = Ballistics.elevation(basePitch, offset.Y)

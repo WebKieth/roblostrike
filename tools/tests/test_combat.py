@@ -40,7 +40,7 @@ class CombatTests(unittest.TestCase):
         self.assertNotIn('muzzle = state.Muzzle or muzzle', client)
         self.assertLess(client.index('state.WeaponFrame, state.Muzzle ='), client.index('fire:FireServer('))
         self.assertLess(client.index('dispersion = Ballistics.dispersion('), client.index('local aim = state.Aim'))
-        self.assertIn('Ballistics.spreadScale(definition.SpreadMultiplier, state.ADS)', client)
+        self.assertIn('Ballistics.spreadScale(definition.SpreadMultiplier, state.ADS, character:GetAttribute("Crouching") == true)', client)
         self.assertIn('dispersion * dispersionWeight) * spreadScale', client)
         self.assertNotIn('impulse *= 0.65', client)
         self.assertNotIn('Random', server)
@@ -104,6 +104,15 @@ near(B.spreadScale(.8, 1), .4)
 near(B.spreadScale(.5, 0), .5)
 near(B.spreadScale(.5, 1), .25)
 near(B.spreadScale(1, .5), .75)
+near(B.spreadScale(2, 0, false), 2)
+near(B.spreadScale(2, 1, false), 1)
+near(B.spreadScale(2, 0, true), 1.6)
+near(B.spreadScale(2, 1, true), .8)
+for _, multiplier in {.5, .8, 1, 2} do
+    for _, ads in {0, .5, 1} do
+        near(B.spreadScale(multiplier, ads, true), B.spreadScale(multiplier, ads, false) * .8)
+    end
+end
 local first = B.dispersion(1, math.huge, .5, .125)
 assert(first.X ~= 0 and first.Y ~= 0, "first shot after complete recovery is already random")
 local other = B.dispersion(1, math.huge, .5, .625)
@@ -118,10 +127,14 @@ for _, interval in {math.huge, 1, .18, .0857} do
             local squared = offset.X^2 + offset.Y^2
             assert(squared > 0 and squared <= boundSquared + 1e-12, "bounded by current recoil strength")
             sumX += offset.X; sumY += offset.Y; radiusSquared += squared
-            for _, multiplier in {.5, .8, 1} do
+            for _, multiplier in {.5, .8, 1, 2} do
                 local hip = offset * B.spreadScale(multiplier, 0)
                 local ads = offset * B.spreadScale(multiplier, 1)
                 near(ads.X, hip.X * .5); near(ads.Y, hip.Y * .5)
+                local crouched = offset * B.spreadScale(multiplier, 0, true)
+                local crouchedADS = offset * B.spreadScale(multiplier, 1, true)
+                near(crouched.X, hip.X * .8); near(crouched.Y, hip.Y * .8)
+                near(crouchedADS.X, ads.X * .8); near(crouchedADS.Y, ads.Y * .8)
             end
         end
     end

@@ -162,6 +162,6 @@ return table.freeze({
 		Magazine = 100,
 		ReloadTime = 5,
 		DamageMultiplier = 1.2,
-		SpreadMultiplier = 1.2,
+		SpreadMultiplier = 2,
 	}),
 })

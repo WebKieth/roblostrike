@@ -87,7 +87,7 @@ class WeaponViewTests(unittest.TestCase):
         self.assertIn("DamageMultiplier = 0.9", self.slots[0])
         for slot, name, damage, spread, magazine in (
             (self.slots[5], "AK-47", "1", "1", 30),
-            (self.slots[6], "M249", "1.2", "1.2", 100),
+            (self.slots[6], "M249", "1.2", "2", 100),
         ):
             self.assertIn(f'ModelName = "{name}"', slot)
             self.assertIn(f"DamageMultiplier = {damage},", slot)

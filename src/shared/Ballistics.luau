@@ -7,8 +7,9 @@ Ballistics.CameraFollowAngle = math.rad(6)
 -- 1 is the existing hardcore recoil pattern (future AK/heavy MG baseline).
 Ballistics.SpreadStrength = 1
 
-function Ballistics.spreadScale(weaponMultiplier: number, ads: number): number
+function Ballistics.spreadScale(weaponMultiplier: number, ads: number, crouching: boolean?): number
 	return Ballistics.SpreadStrength * weaponMultiplier * (1 - math.clamp(ads, 0, 1) * 0.5)
+		* (if crouching then 0.8 else 1)
 end
 
 -- Exact compact support: never an exponential tail after the requested .5s.
