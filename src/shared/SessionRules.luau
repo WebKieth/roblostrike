@@ -6,6 +6,9 @@ local Rules = {
 	-- 0 uses the individual experience owner. Set explicitly for group games.
 	AdminUserId = 0,
 	WilhelmSoundId = "rbxassetid://160718677",
+	-- assets/audio/shiza.mp3; the experience must have permission to use this audio.
+	SessionMusicSoundId = "rbxassetid://82769481359031",
+	SessionMusicVolume = 0.35,
 	Colors = { Red = Color3.fromRGB(226, 65, 70), Blue = Color3.fromRGB(65, 145, 245) },
 }
 

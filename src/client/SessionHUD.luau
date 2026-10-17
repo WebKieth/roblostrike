@@ -8,10 +8,12 @@ local UserInputService = game:GetService("UserInputService")
 local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local Animation = require(script.Parent.CharacterAnimation)
 local Audio = require(script.Parent.AudioSettings)
+local SessionMusic = require(script.Parent.SessionMusic)
 local SessionHUD = {}
 
 function SessionHUD.start(player: Player)
 	local state = ReplicatedStorage:WaitForChild("SessionState")
+	SessionMusic.start(state)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local choose = remotes:WaitForChild("ChooseTeam") :: RemoteEvent
 	local menu = remotes:WaitForChild("TeamMenu") :: RemoteEvent
