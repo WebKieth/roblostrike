@@ -19,7 +19,7 @@ function Combat.start(player: Player)
 	local equip = remotes:WaitForChild("EquipWeapon") :: RemoteEvent
 	local state = {
 		Aim = CFrame.identity,
-		WeaponFrame = CFrame.identity,
+		WeaponFrame = nil :: CFrame?,
 		ADS = 0,
 		Kick = 0,
 		Muzzle = nil :: Vector3?,
@@ -83,12 +83,14 @@ function Combat.start(player: Player)
 	UserInputService.WindowFocusReleased:Connect(release)
 	UserInputService.TextBoxFocused:Connect(release)
 	GuiService.MenuOpened:Connect(release)
+	player:GetAttributeChangedSignal("SettingsOpen"):Connect(release)
 	player.CharacterRemoving:Connect(function()
 		release()
 		currentTool = nil
 		carry, impulse = Vector2.zero, Vector2.zero
 		dispersion = Vector2.zero
 		lastShot = -math.huge
+		state.WeaponFrame, state.Muzzle = nil, nil
 	end)
 	ContextActionService:BindActionAtPriority("RobostrikeCombat", function(_, inputState, input)
 		if inputState == Enum.UserInputState.Cancel then
@@ -96,7 +98,7 @@ function Combat.start(player: Player)
 			return Enum.ContextActionResult.Sink
 		end
 		local pressed = inputState == Enum.UserInputState.Begin
-		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then release(); return Enum.ContextActionResult.Pass end
+		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") or player:GetAttribute("SettingsOpen") then release(); return Enum.ContextActionResult.Pass end
 		if pressed and UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if pressed and not held then held, queued = true, true
@@ -115,10 +117,16 @@ function Combat.start(player: Player)
 		if shooter == player.UserId then
 			if flesh then hitUntil = os.clock() + 0.12 end
 		else
-			Effects.flash(muzzle)
+			local delta = target - muzzle
+			local direction = if delta.Magnitude > 0.001 then delta.Unit else Vector3.new(0, 0, -1)
+			Effects.flash(muzzle, false, direction)
 			Effects.tracer(muzzle, target)
 			local definition = Weapons[slot]
-			if definition then Effects.sound(muzzle, definition) end
+			if definition then
+				Effects.sound(muzzle, definition)
+				local muzzleFrame = CFrame.lookAt(muzzle, muzzle + direction)
+				Effects.casing(muzzleFrame * CFrame.new(-definition.Muzzle), definition)
+			end
 		end
 		if normal and material then Effects.impact(target, normal, material, hit, flesh) end
 	end)
@@ -155,13 +163,17 @@ function Combat.start(player: Player)
 			state.Muzzle = nil
 		end
 		local active = humanoid ~= nil and humanoid.Health > 0 and definition ~= nil and definition.FireInterval ~= nil
-			and not player:GetAttribute("SessionBlocked") and not player:GetAttribute("TeamMenuOpen")
+			and not player:GetAttribute("SessionBlocked") and not player:GetAttribute("TeamMenuOpen") and not player:GetAttribute("SettingsOpen")
 		state.Active = active
 		state.ADS += ((if active and aiming and tool and not tool:GetAttribute("Reloading") then 1 else 0) - state.ADS) * (1 - math.exp(-dt * 16))
 		camera.FieldOfView = defaultFov + (55 - defaultFov) * state.ADS
 		crosshair.Visible, status.Visible = active, active
 		if not active or not tool or not humanoid or not head then
 			state.Aim = camera.CFrame
+			-- Freeze blocks firing, not the camera-local presentation. Never leave
+			-- hands pointing at identity/last round's world-space weapon frame.
+			state.WeaponFrame = if definition and definition.FireInterval then camera.CFrame * definition.View else nil
+			state.Muzzle = nil
 			held, aiming, queued = false, false, false
 			if humanoid and humanoid.Health > 0 and not tool then
 				status.Visible = true
@@ -253,7 +265,8 @@ function Combat.start(player: Player)
 			nextShot = Ballistics.nextShot(now, nextShot, definition.FireInterval, dt)
 			-- Head-relative positions are independent of character replication lag.
 			fire:FireServer(muzzle - head.Position, direction)
-			Effects.flash(muzzle, true)
+			Effects.flash(muzzle, true, direction)
+			Effects.casing(weaponFrame, definition)
 			Effects.tracer(muzzle, target)
 			Effects.sound(muzzle, definition)
 			index += 1

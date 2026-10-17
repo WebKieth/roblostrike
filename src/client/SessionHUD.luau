@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local Animation = require(script.Parent.CharacterAnimation)
+local Audio = require(script.Parent.AudioSettings)
 local SessionHUD = {}
 
 function SessionHUD.start(player: Player)
@@ -14,6 +15,7 @@ function SessionHUD.start(player: Player)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local choose = remotes:WaitForChild("ChooseTeam") :: RemoteEvent
 	local menu = remotes:WaitForChild("TeamMenu") :: RemoteEvent
+	local setup = remotes:WaitForChild("SessionSetup") :: RemoteEvent
 	local pose = remotes:WaitForChild("SpectatorPose") :: RemoteEvent
 	local gui = Instance.new("ScreenGui")
 	gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset, gui.DisplayOrder = "SessionHUD", false, true, 20
@@ -59,12 +61,33 @@ function SessionHUD.start(player: Player)
 		button.Activated:Connect(function() choose:FireServer(id) end)
 		buttons[id] = button
 	end
+	local setupPanel = Instance.new("Frame")
+	setupPanel.Name, setupPanel.Size, setupPanel.Position = "SessionSetup", UDim2.new(1, 0, 0, 142), UDim2.fromOffset(0, 222)
+	setupPanel.BackgroundTransparency, setupPanel.Parent = 1, panel
+	local botCount = label(setupPanel, UDim2.new(1, -24, 0, 26), UDim2.fromOffset(12, 0), 15)
+	local botButtons: { [number]: TextButton } = {}
+	for count = 0, Rules.TeamSize do
+		local b = Instance.new("TextButton")
+		b.Size, b.Position = UDim2.new(0.2, 0, 0, 32), UDim2.new(0.05 + count * 0.225, 0, 0, 32)
+		b.Text, b.Font, b.TextSize = if count == 0 then "Без ботов" else tostring(count), Enum.Font.GothamMedium, 15
+		b.TextColor3, b.Parent = Color3.fromRGB(235, 242, 250), setupPanel
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+		b.Activated:Connect(function() setup:FireServer("Bots", count) end)
+		botButtons[count] = b
+	end
+	local start = Instance.new("TextButton")
+	start.Size, start.Position = UDim2.new(0.9, 0, 0, 40), UDim2.new(0.05, 0, 0, 82)
+	start.Font, start.TextSize = Enum.Font.GothamBold, 17
+	start.BackgroundColor3, start.TextColor3, start.Parent = Color3.fromRGB(49, 130, 93), Color3.new(1, 1, 1), setupPanel
+	Instance.new("UICorner", start).CornerRadius = UDim.new(0, 8)
+	start.Activated:Connect(function() setup:FireServer("Start") end)
 	ContextActionService:BindActionAtPriority("RobostrikeTeamMenu", function(_, inputState)
+		if player:GetAttribute("SettingsOpen") then return Enum.ContextActionResult.Sink end
 		if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
 		if inputState == Enum.UserInputState.Begin then menu:FireServer(not player:GetAttribute("TeamMenuOpen")) end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.ContextActionPriority.High.Value + 10, Enum.KeyCode.M)
-	-- Stock PlayerModule controls are also stopped by the server's anchored root.
+	-- Block input while the server disables movement, without anchoring the rig.
 	ContextActionService:BindActionAtPriority("RobostrikeSessionFreeze", function()
 		return if Rules.blocked(player) then Enum.ContextActionResult.Sink else Enum.ContextActionResult.Pass
 	end, false, Enum.ContextActionPriority.High.Value + 9, Enum.PlayerActions.CharacterForward,
@@ -84,7 +107,8 @@ function SessionHUD.start(player: Player)
 		emitter.Anchored, emitter.CanCollide, emitter.CanTouch, emitter.CanQuery, emitter.Transparency = true, false, false, false, 1
 		emitter.Position, emitter.Parent = position, workspace
 		local sound = Instance.new("Sound")
-		sound.SoundId, sound.Volume, sound.RollOffMaxDistance = Rules.WilhelmSoundId, 0.8, 110
+		sound.SoundId, sound.Volume, sound.RollOffMaxDistance = Rules.WilhelmSoundId, 0.64, 110
+		Audio.assign(sound, "Characters")
 		sound.Parent = emitter
 		sound:Play()
 		Debris:AddItem(emitter, 8)
@@ -133,13 +157,29 @@ function SessionHUD.start(player: Player)
 	RunService:BindToRenderStep("RobostrikeSessionHUD", Enum.RenderPriority.Camera.Value + 5, function()
 		local current = state:GetAttribute("Phase")
 		local waiting = current == "WaitingAdmin"
-		local open = player:GetAttribute("TeamMenuOpen") == true and not waiting
+		local configuring = current == "Lobby" and state:GetAttribute("Started") ~= true
+		local admin = player:GetAttribute("SessionAdmin") == true
+		local bots = state:GetAttribute("BotsPerTeam") or Rules.TeamSize
+		local open = (player:GetAttribute("TeamMenuOpen") == true or configuring) and not waiting
+		local height = if configuring then 460 else 310
+		panel.Size, constraint.MaxSize = UDim2.new(0.9, 0, 0, height), Vector2.new(640, height)
+		setupPanel.Visible = configuring
+		botCount.Text = if bots == 0 then "Без ботов · только игроки" else string.format("До %d ботов на команду · до %d участников на сторону", bots, Rules.TeamSize)
+		botCount.TextScaled = true
+		for count, b in botButtons do
+			b.Interactable = admin and configuring
+			b.BackgroundColor3 = if count == bots then Color3.fromRGB(51, 130, 191) else Color3.fromRGB(37, 49, 65)
+		end
+		start.Interactable = admin and configuring
+		start.Text = if admin then "НАЧАТЬ СЕССИЮ" else "ОЖИДАНИЕ АДМИНИСТРАТОРА"
 		overlay.Visible, hint.Visible = open or waiting, not waiting
 		UserInputService.MouseIconEnabled = open or waiting
 		if open or waiting then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 		score.Text = string.format('<font color="#E24146">КРАСНЫЕ  %d</font>  :  <font color="#4191F5">%d  СИНИЕ</font>', state:GetAttribute("RedWins") or 0, state:GetAttribute("BlueWins") or 0)
-		subtitle.Text = if waiting then "Ожидание администратора" else "Выбери команду · бой 5 × 5"
-		footnote.Text = player:GetAttribute("TeamMenuError") or (if waiting then "Сессия начнётся, когда подключится владелец игры."
+		subtitle.Text = if waiting then "Ожидание администратора" else string.format("Выбери команду · бой %d × %d", Rules.TeamSize, Rules.TeamSize)
+		footnote.Text = player:GetAttribute("TeamMenuError") or state:GetAttribute("SetupError") or (if waiting then "Сессия начнётся, когда подключится владелец игры."
+			elseif configuring then (if bots == 0 then "Выберите команды. Для старта нужен хотя бы один игрок с каждой стороны."
+				else "Выберите команды. Боты займут свободные места. Количество ботов задаёт администратор перед стартом.")
 			elseif player:GetAttribute("TeamId") then "Выбор любой команды = смерть и наблюдение до нового раунда.\nM — закрыть меню. Пока меню открыто, тебя могут убить."
 			else "Ты займёшь место бота. Если он погиб — вступишь в следующем раунде.")
 		for id, button in buttons do
@@ -147,13 +187,13 @@ function SessionHUD.start(player: Player)
 			for _, other in Players:GetPlayers() do if other:GetAttribute("TeamId") == id then count += 1 end end
 			button.Visible = not waiting
 			button.Interactable = current ~= "Preparing" and (count < Rules.TeamSize or player:GetAttribute("TeamId") == id)
-			button.Text = string.format("%s\n%d / 5 игроков", if id == "Red" then "КРАСНЫЕ" else "СИНИЕ", count)
+			button.Text = string.format("%s\n%d / %d игроков", if id == "Red" then "КРАСНЫЕ" else "СИНИЕ", count, Rules.TeamSize)
 		end
 		local remaining = math.max(0, math.ceil((state:GetAttribute("Deadline") or 0) - workspace:GetServerTimeNow()))
 		banner.Text = if current == "Freeze" then "БОЙ ЧЕРЕЗ " .. remaining
 			elseif current == "Preparing" then "Подготовка раунда…"
 			elseif current == "Intermission" then (if state:GetAttribute("Winner") == "Draw" then "НИЧЬЯ" elseif state:GetAttribute("Winner") == "Red" then "ПОБЕДА КРАСНЫХ" else "ПОБЕДА СИНИХ") .. " · " .. remaining
-			elseif current == "Lobby" then "Выбери команду для начала игры" else ""
+			elseif current == "Lobby" then (if configuring then "Настройка сессии · выберите команды" else "Ожидание игроков в обеих командах") else ""
 		local camera = workspace.CurrentCamera
 		if not camera then return end
 		for _, other in Players:GetPlayers() do

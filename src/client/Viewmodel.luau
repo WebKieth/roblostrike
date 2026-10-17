@@ -50,6 +50,7 @@ function Viewmodel.start(player: Player, combat: any)
 	local grenadePose: CFrame? = nil
 
 	local function clear()
+		Effects.clearMuzzle()
 		if model then
 			model:Destroy()
 		end
@@ -132,9 +133,9 @@ function Viewmodel.start(player: Player, combat: any)
 		end
 		if definition.FireInterval then
 			-- Combat already resolved cover, reticle and firing from this pose.
-			weaponFrame = combat.WeaponFrame
+			weaponFrame = combat.WeaponFrame or weaponFrame
 			combat.Muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle)
-			Effects.updateMuzzle(combat.Muzzle)
+			Effects.updateMuzzle(combat.Muzzle, weaponFrame.LookVector)
 		end
 		if weapon then
 			weapon:PivotTo(weaponFrame)

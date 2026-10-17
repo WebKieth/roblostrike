@@ -12,12 +12,22 @@ ROOT = Path(__file__).resolve().parents[2]
 class SessionTests(unittest.TestCase):
     run_luau = test_combat.CombatTests.run_luau
 
-    def test_real_round_and_roster_controller(self):
+    def session_fixture(self):
         fixture = (ROOT / 'tools/tests/fixtures/session.luau').read_text()
         fixture = fixture.replace('-- SESSION_RULES_HERE', (ROOT / 'src/shared/SessionRules.luau').read_text())
         fixture = fixture.replace('-- SESSION_MODULE_HERE', (ROOT / 'src/server/Session.luau').read_text())
         fixture = fixture.replace('-- COLLISION_MODULE_HERE', (ROOT / 'src/server/CharacterCollision.luau').read_text())
-        self.run_luau(fixture)
+        fixture = fixture.replace('-- MOVEMENT_MODULE_HERE', (ROOT / 'src/server/Movement.luau').read_text())
+        return fixture
+
+    def test_real_round_and_roster_controller(self):
+        self.run_luau(self.session_fixture())
+
+    def test_human_only_setup_and_no_disconnect_backfill(self):
+        self.run_luau(self.session_fixture().replace('local scenario="default"', 'local scenario="no_bots"'))
+
+    def test_configured_bot_budget_with_empty_slots(self):
+        self.run_luau(self.session_fixture().replace('local scenario="default"', 'local scenario="one_bot"'))
 
     def test_bots_yield_without_pushing_or_retreating_into_walls(self):
         fixture = (ROOT / 'tools/tests/fixtures/bot_spacing.luau').read_text()

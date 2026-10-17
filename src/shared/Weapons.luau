@@ -18,6 +18,8 @@ return table.freeze({
 		ADS = CFrame.new(0, -0.28, -1.18),
 		SightHeight = 0.28,
 		Muzzle = Vector3.new(0, 0, -2.12),
+		EjectionPort = Vector3.new(0.22, 0.06, -0.15),
+		CasingSize = Vector3.new(0.24, 0.085, 0.085),
 		RightHand = Vector3.new(0, -0.3, 0.42),
 		LeftHand = Vector3.new(-0.06, -0.13, -0.85),
 		FireInterval = 0.0857, -- 700 RPM, identical for tapping and holding.
@@ -43,6 +45,8 @@ return table.freeze({
 		ADS = CFrame.new(0, -0.24, -0.9),
 		SightHeight = 0.24,
 		Muzzle = Vector3.new(0, 0, -0.99),
+		EjectionPort = Vector3.new(0.18, 0.13, -0.24),
+		CasingSize = Vector3.new(0.14, 0.09, 0.09),
 		FireInterval = 0.18,
 		Automatic = false,
 		ShotSound = "rbxassetid://95309366",

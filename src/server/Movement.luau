@@ -13,6 +13,8 @@ type State = {
 	hipHeight: number,
 	hips: { [Motor6D]: CFrame },
 	filter: OverlapParams,
+	autoRotate: boolean,
+	jumpPower: number,
 }
 local states: { [Player]: State } = {}
 local Movement = {}
@@ -40,6 +42,8 @@ function Movement.add(player: Player, character: Model)
 		hipHeight = humanoid.HipHeight,
 		hips = hips,
 		filter = filter,
+		autoRotate = humanoid.AutoRotate,
+		jumpPower = humanoid.JumpPower,
 	}
 	character:SetAttribute("Crouching", false)
 end
@@ -61,6 +65,21 @@ function Movement.resume(player: Player)
 	if not state then return end
 	state.humanoid.WalkSpeed = if state.crouching then Config.CrouchSpeed
 		elseif state.walking then Config.WalkSpeed else Config.RunSpeed
+	state.humanoid.AutoRotate = state.autoRotate
+	state.humanoid.JumpPower = if state.crouching then 0 else state.jumpPower
+end
+
+function Movement.freeze(player: Player)
+	local state = states[player]
+	if not state then return end
+	state.humanoid.WalkSpeed = 0
+	state.humanoid.JumpPower = 0
+	state.humanoid.Jump = false
+	state.humanoid.AutoRotate = false
+	state.humanoid:Move(Vector3.zero)
+	-- Keep gravity and floor contact active; never pin the rig above the floor.
+	local velocity = state.root.AssemblyLinearVelocity
+	state.root.AssemblyLinearVelocity = Vector3.new(0, velocity.Y, 0)
 end
 
 local function canStand(state: State): boolean
@@ -77,8 +96,7 @@ function Movement.step(_dt: number)
 			continue
 		end
 		if player:GetAttribute("SessionBlocked") or player:GetAttribute("TeamMenuOpen") then
-			humanoid.WalkSpeed = 0
-			humanoid.Jump = false
+			Movement.freeze(player)
 			continue
 		end
 		local crouching = state.wantsCrouch or (state.crouching and not canStand(state))

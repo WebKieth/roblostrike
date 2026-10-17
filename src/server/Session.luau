@@ -15,6 +15,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	choose.Name, choose.Parent = "ChooseTeam", remotes
 	local menu = Instance.new("RemoteEvent")
 	menu.Name, menu.Parent = "TeamMenu", remotes
+	local setup = Instance.new("RemoteEvent")
+	setup.Name, setup.Parent = "SessionSetup", remotes
 	local death = Instance.new("RemoteEvent")
 	death.Name, death.Parent = "SessionDeath", remotes
 	local pose = Instance.new("RemoteEvent")
@@ -46,6 +48,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	local teams: any = {}
 	local generation, round = 0, 0
 	local active, starting, mutating = false, false, false
+	local launched, botsPerTeam = false, Rules.TeamSize
 	local template: Model? = nil
 	local requests: { [Player]: number } = {}
 	for _, id in { "Red", "Blue" } do
@@ -58,6 +61,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		for i = 1, Rules.TeamSize do slots[id][i] = {} end
 	end
 	state:SetAttribute("Phase", "WaitingAdmin")
+	state:SetAttribute("Started", false)
+	state:SetAttribute("BotsPerTeam", botsPerTeam)
 
 	local function isAdmin(player: Player): boolean
 		local id = if Rules.AdminUserId ~= 0 then Rules.AdminUserId else game.CreatorId
@@ -79,17 +84,12 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		local root = if model then model:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
 		if root and alive(model) then
 			local wasAnchored = root.Anchored
-			root.Anchored = blocked
-			if blocked or wasAnchored then
-				root.AssemblyLinearVelocity = Vector3.zero
+			root.Anchored = false
+			if wasAnchored then
 				root.AssemblyAngularVelocity = Vector3.zero
-			end
-			if not blocked then
-				-- Anchoring discards manual network ownership. Restore it immediately,
-				-- before controls unlock, instead of waiting for automatic migration.
 				root:SetNetworkOwner(player)
-				Movement.resume(player)
 			end
+			if blocked then Movement.freeze(player) else Movement.resume(player) end
 		end
 		player:SetAttribute("SessionBlocked", state:GetAttribute("Phase") ~= "Combat")
 	end
@@ -100,8 +100,12 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		for _, roster in slots do
 			for _, slot in roster do
 				if not slot.player and alive(slot.model) then
-					local root = slot.model:FindFirstChild("HumanoidRootPart")
-					if root then root.Anchored = value ~= "Combat" end
+					local h = slot.model:FindFirstChildOfClass("Humanoid") :: Humanoid
+					h.WalkSpeed = if value == "Combat" then 16 else 0
+					h.JumpPower = if value == "Combat" then 35 else 0
+					h.AutoRotate = value == "Combat"
+					h.Jump = false
+					h:Move(Vector3.zero)
 				end
 			end
 		end
@@ -159,7 +163,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		root.Anchored = true
 		model:PivotTo(Rules.spawn(id, index) * root.CFrame:Inverse() * model:GetPivot())
 		local h = model:FindFirstChildOfClass("Humanoid") :: Humanoid
-		h.WalkSpeed, h.JumpPower = 16, 35
+		h.WalkSpeed, h.JumpPower, h.AutoRotate = 0, 0, false
 		h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		if not h:FindFirstChildOfClass("Animator") then Instance.new("Animator", h) end
 		CharacterCollision.apply(model)
@@ -167,6 +171,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		model:SetAttribute("Helmet", false)
 		decorate(model, id, index, true)
 		model.Parent = actors
+		root.Anchored = false
+		root:SetNetworkOwner(nil)
 		local tool = Loadout.create(1)
 		tool.Parent = model
 		h:EquipTool(tool)
@@ -185,14 +191,28 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		end
 		return false
 	end
+	local function ready(): boolean
+		if not hasHumans() then return false end
+		for _, roster in slots do
+			local humans = 0
+			for _, slot in roster do if slot.player then humans += 1 end end
+			if humans == 0 and botsPerTeam == 0 then return false end
+		end
+		return true
+	end
 	local startRound: () -> ()
 	startRound = function()
-		if starting or not active or not hasHumans() then return end
+		if starting or not active or not launched then return end
+		if not ready() then
+			phase("Lobby")
+			clearModels()
+			return
+		end
 		starting = true
 		local token = generation
 		phase("Preparing")
 		clearModels()
-		if not template then
+		if botsPerTeam > 0 and not template then
 			local description = PoliceSkin.description()
 			local ok, result = pcall(function()
 				return Players:CreateHumanoidModelFromDescriptionAsync(description, Enum.HumanoidRigType.R6)
@@ -210,9 +230,14 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			end
 		end
 		for id, roster in slots do
+			local remainingBots = botsPerTeam
 			for index, slot in roster do
 				if token ~= generation or not active then starting = false; return end
 				local owner = slot.player
+				if not owner then
+					if remainingBots == 0 then continue end
+					remainingBots -= 1
+				end
 				local model = if owner then spawnPlayer(owner, Rules.spawn(id, index)) else makeBot(id, index)
 				if token ~= generation or slot.player ~= owner then
 					if model then model:Destroy() end
@@ -237,6 +262,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	end
 	local function stop()
 		active = false
+		launched, botsPerTeam = false, Rules.TeamSize
+		state:SetAttribute("Started", false)
+		state:SetAttribute("BotsPerTeam", botsPerTeam)
+		state:SetAttribute("SetupError", nil)
 		generation += 1
 		phase("WaitingAdmin")
 		clearModels()
@@ -258,6 +287,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		for _, player in Players:GetPlayers() do player:SetAttribute("TeamMenuOpen", true) end
 	end
 	local function added(player: Player)
+		player:SetAttribute("SessionAdmin", isAdmin(player))
 		player:SetAttribute("SessionBlocked", true)
 		player:SetAttribute("TeamMenuOpen", active)
 		activate()
@@ -272,7 +302,11 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 				if slot.player == player then
 					slot.player = nil
 					local old = slot.model
-					if active and alive(old) then
+					local bots = 0
+					for _, other in roster do
+						if not other.player and other.model and other.model:GetAttribute("Bot") then bots += 1 end
+					end
+					if active and bots < botsPerTeam and alive(old) then
 						local root = old:FindFirstChild("HumanoidRootPart") :: BasePart
 						local bot = makeBot(id, index)
 						if bot then
@@ -281,8 +315,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 							h.Health = (old:FindFirstChildOfClass("Humanoid") :: Humanoid).Health
 							bot:SetAttribute("Armor", old:GetAttribute("Armor") or 0)
 							bot:SetAttribute("Helmet", old:GetAttribute("Helmet") == true)
-							local botRoot = bot:FindFirstChild("HumanoidRootPart") :: BasePart
-							botRoot.Anchored = state:GetAttribute("Phase") ~= "Combat"
+							local combat = state:GetAttribute("Phase") == "Combat"
+							h.WalkSpeed, h.JumpPower, h.AutoRotate = if combat then 16 else 0, if combat then 35 else 0, combat
 						end
 						slot.model = bot
 					else slot.model = nil end
@@ -293,9 +327,33 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	end)
 	menu.OnServerEvent:Connect(function(player, open)
 		if not active or typeof(open) ~= "boolean" then return end
+		if not launched and not open then return end
 		if not open and not player:GetAttribute("TeamId") then return end
 		player:SetAttribute("TeamMenuOpen", open)
 		lock(player)
+	end)
+	setup.OnServerEvent:Connect(function(player, command, value)
+		if not active or launched or starting or mutating or not isAdmin(player) then return end
+		if state:GetAttribute("Phase") ~= "Lobby" then return end
+		if command == "Bots" then
+			if typeof(value) ~= "number" or value % 1 ~= 0 or value < 0 or value > Rules.TeamSize then return end
+			botsPerTeam = value
+			state:SetAttribute("BotsPerTeam", value)
+			state:SetAttribute("SetupError", nil)
+		elseif command == "Start" then
+			if not ready() then
+				state:SetAttribute("SetupError", if not hasHumans() then "Сначала выберите команду."
+					else "Для игры без ботов нужны игроки в обеих командах.")
+				return
+			end
+			launched = true
+			state:SetAttribute("Started", true)
+			state:SetAttribute("SetupError", nil)
+			for _, other in Players:GetPlayers() do
+				if other:GetAttribute("TeamId") then other:SetAttribute("TeamMenuOpen", false) end
+			end
+			task.spawn(startRound)
+		end
 	end)
 	choose.OnServerEvent:Connect(function(player, id)
 		if not active or starting or mutating or (id ~= "Red" and id ~= "Blue") then return end
@@ -340,7 +398,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		destination.player = player
 		player.Team = teams[id]
 		player:SetAttribute("TeamId", id)
-		player:SetAttribute("TeamMenuOpen", false)
+		player:SetAttribute("TeamMenuOpen", not launched)
 		lock(player)
 		local token = generation
 		if canEnter then
@@ -360,7 +418,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			elseif model then model:Destroy() end
 		end
 		mutating = false
-		if active and state:GetAttribute("Phase") == "Lobby" then task.spawn(startRound) end
+		if active and launched and state:GetAttribute("Phase") == "Lobby" then task.spawn(startRound) end
 	end)
 	require(script.Parent.Bots).start(slots, state, remotes)
 	RunService.Heartbeat:Connect(function()

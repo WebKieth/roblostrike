@@ -16,6 +16,7 @@ end
 
 function Rules.blocked(player: Player): boolean
 	return player:GetAttribute("SessionBlocked") == true or player:GetAttribute("TeamMenuOpen") == true
+		or player:GetAttribute("SettingsOpen") == true
 end
 
 -- Stay behind the solid middle wall: the outer room edges face the doorways.

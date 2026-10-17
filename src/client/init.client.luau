@@ -17,6 +17,9 @@ local equip = remotes:WaitForChild("EquipWeapon") :: RemoteEvent
 local movement = remotes:WaitForChild("SetMovement") :: RemoteEvent
 local drop = remotes:WaitForChild("DropWeapon") :: RemoteEvent
 
+require(script.SettingsUI).start(player)
+require(script.FirstPersonVisibility).start(player)
+
 local hud = HUD.new(player:WaitForChild("PlayerGui") :: PlayerGui)
 player.CameraMode = Enum.CameraMode.LockFirstPerson
 UserInputService.MouseIconEnabled = false
@@ -48,6 +51,9 @@ local function resetMovement()
 	crouching = false
 	sendMovement()
 end
+player:GetAttributeChangedSignal("SettingsOpen"):Connect(function()
+	if player:GetAttribute("SettingsOpen") then resetMovement() end
+end)
 
 local function selectSlot(slot: number)
 	if SessionRules.blocked(player) then return end
@@ -71,6 +77,7 @@ ContextActionService:BindActionAtPriority("RobostrikeStance", function(_, state,
 		return Enum.ContextActionResult.Sink
 	end
 	local pressed = state == Enum.UserInputState.Begin
+	if pressed and player:GetAttribute("SettingsOpen") then return Enum.ContextActionResult.Pass end
 	if not pressed and state ~= Enum.UserInputState.End then
 		return Enum.ContextActionResult.Sink
 	end

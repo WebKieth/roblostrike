@@ -2,6 +2,8 @@
 
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Audio = require(script.Parent.AudioSettings)
 local ShotEffects = {}
 local random = Random.new()
 
@@ -9,8 +11,9 @@ local folder = Instance.new("Folder")
 folder.Name = "LocalBulletEffects"
 folder.Parent = workspace
 local marks: { Instance } = {}
-local muzzleFlashes: { Part } = {}
+local muzzleFlashes: { { part: Part, offset: CFrame } } = {}
 local soundEmitters: { Part } = {}
+local casings: { any } = {}
 
 local function part(name: string, size: Vector3, frame: CFrame, color: Color3): Part
 	local p = Instance.new("Part")
@@ -22,16 +25,66 @@ local function part(name: string, size: Vector3, frame: CFrame, color: Color3): 
 	return p
 end
 
-function ShotEffects.flash(position: Vector3, followMuzzle: boolean?)
-	local flash = part("MuzzleFlash", Vector3.new(0.17, 0.17, 0.17), CFrame.new(position), Color3.fromRGB(255, 219, 130))
-	flash.Shape = Enum.PartType.Ball
-	flash.Material = Enum.Material.Neon
+function ShotEffects.flash(position: Vector3, followMuzzle: boolean?, direction: Vector3?)
+	local frame = CFrame.lookAt(position, position + (direction or Vector3.new(0, 0, -1)))
+	local function flame(name: string, size: Vector3, offset: CFrame, color: Color3): Part
+		local p = part(name, size, frame * offset, color)
+		p.Shape, p.Material = Enum.PartType.Ball, Enum.Material.Neon
+		Debris:AddItem(p, 0.055)
+		if followMuzzle then table.insert(muzzleFlashes, { part = p, offset = offset }) end
+		return p
+	end
+	local flash = flame("MuzzleFlash", Vector3.new(0.18, 0.18, 0.55), CFrame.new(0, 0, -0.24), Color3.fromRGB(255, 244, 199))
+	local twist = random:NextNumber(0, math.pi)
+	for i = 1, 3 do
+		flame("MuzzleFlame", Vector3.new(0.09, 0.42, 0.65),
+			CFrame.new(0, 0, -0.3) * CFrame.Angles(0, 0, twist + i * math.pi / 3), Color3.fromRGB(255, 158, 46))
+	end
 	local light = Instance.new("PointLight")
-	light.Color, light.Brightness, light.Range = flash.Color, 2, 7
+	light.Color, light.Brightness, light.Range = Color3.fromRGB(255, 195, 110), 4, 10
 	light.Parent = flash
-	Debris:AddItem(flash, 0.035)
-	if followMuzzle then table.insert(muzzleFlashes, flash) end
 end
+
+function ShotEffects.casing(weaponFrame: CFrame, definition: any)
+	if not definition.EjectionPort or not definition.CasingSize then return end
+	if #casings >= 40 then table.remove(casings, 1).part:Destroy() end
+	local origin = weaponFrame:PointToWorldSpace(definition.EjectionPort)
+	local shell = part("EjectedCasing", definition.CasingSize, CFrame.new(origin), Color3.fromRGB(189, 139, 55))
+	shell.Shape, shell.Material = Enum.PartType.Cylinder, Enum.Material.Metal
+	local filter = RaycastParams.new()
+	filter.FilterDescendantsInstances = { folder }
+	filter.RespectCanCollide, filter.CollisionGroup = true, "Characters"
+	table.insert(casings, { part = shell, age = 0, bounces = 0, position = origin, filter = filter,
+		velocity = weaponFrame:VectorToWorldSpace(Vector3.new(random:NextNumber(7, 11), random:NextNumber(4, 7), random:NextNumber(1, 3))),
+		rotation = weaponFrame.Rotation, spin = Vector3.new(random:NextNumber(5, 12), random:NextNumber(8, 16), random:NextNumber(4, 10)) })
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	for i = #casings, 1, -1 do
+		local shell = casings[i]
+		shell.age += dt
+		if not shell.part.Parent or shell.age >= 2.5 then
+			shell.part:Destroy()
+			table.remove(casings, i)
+			continue
+		end
+		-- Cosmetic swept motion, not physical Parts that can block a character.
+		local step = math.min(dt, 0.05)
+		if shell.bounces < 2 then
+			shell.velocity += Vector3.new(0, -workspace.Gravity * step, 0)
+			local displacement = shell.velocity * step
+			local hit = workspace:Raycast(shell.position, displacement, shell.filter)
+			if hit then
+				shell.position = hit.Position + hit.Normal * 0.06
+				shell.velocity = (shell.velocity - 2 * shell.velocity:Dot(hit.Normal) * hit.Normal) * 0.3
+				shell.bounces += 1
+			else shell.position += displacement end
+			shell.rotation *= CFrame.Angles(shell.spin.X * step, shell.spin.Y * step, shell.spin.Z * step)
+		end
+		shell.part.CFrame = CFrame.new(shell.position) * shell.rotation
+		shell.part.Transparency = math.clamp((shell.age - 2) / 0.5, 0, 1)
+	end
+end)
 
 function ShotEffects.sound(position: Vector3, definition: any)
 	if not definition.ShotSound then return end
@@ -48,6 +101,7 @@ function ShotEffects.sound(position: Vector3, definition: any)
 	sound.Name = "Gunshot"
 	sound.SoundId = definition.ShotSound
 	sound.Volume = definition.ShotVolume or 0.7
+	Audio.assign(sound, "Gunfire")
 	sound.PlaybackSpeed = definition.ShotPlaybackSpeed or 1
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = 8
@@ -60,15 +114,21 @@ end
 
 -- A local flash lives for several frames: keep it on the moving gun, not
 -- suspended at the previous frame's world position while the player runs.
-function ShotEffects.updateMuzzle(position: Vector3)
+function ShotEffects.updateMuzzle(position: Vector3, direction: Vector3?)
+	local frame = CFrame.lookAt(position, position + (direction or Vector3.new(0, 0, -1)))
 	for i = #muzzleFlashes, 1, -1 do
 		local flash = muzzleFlashes[i]
-		if flash.Parent then
-			flash.CFrame = CFrame.new(position)
+		if flash.part.Parent then
+			flash.part.CFrame = frame * flash.offset
 		else
 			table.remove(muzzleFlashes, i)
 		end
 	end
+end
+
+function ShotEffects.clearMuzzle()
+	for _, flash in muzzleFlashes do flash.part:Destroy() end
+	table.clear(muzzleFlashes)
 end
 
 local function response(material: Enum.Material): (string, Color3, number)
