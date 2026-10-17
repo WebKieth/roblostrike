@@ -115,8 +115,9 @@ local function spawnCharacter(player: Player, spawnAt: CFrame): Model?
 	end
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
-	root.Anchored = false
-	root:SetNetworkOwner(player)
+	-- Do not briefly simulate a fresh rig before Session applies the freeze.
+	root.Anchored = SessionRules.blocked(player)
+	if not root.Anchored then root:SetNetworkOwner(player) end
 	movement.add(player, character)
 	Loadout.give(player)
 	Loadout.equip(player, 1)

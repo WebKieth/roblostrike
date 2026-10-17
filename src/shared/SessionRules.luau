@@ -18,10 +18,11 @@ function Rules.blocked(player: Player): boolean
 	return player:GetAttribute("SessionBlocked") == true or player:GetAttribute("TeamMenuOpen") == true
 end
 
--- Spread across the rear rooms, not the narrow locker corridors at z=-10/-54.
+-- Stay behind the solid middle wall: the outer room edges face the doorways.
+-- Cover takes priority over using the full width of the room.
 local spawns = {
-	Blue = { { -24, 3.1, 4 }, { -8, 3.1, 2 }, { 8, 3.1, 4 } },
-	Red = { { -24, 3.1, -70 }, { -8, 3.1, -70 }, { 8, 3.1, -70 } },
+	Blue = { { -14, 3.1, 4 }, { -7, 3.1, 2 }, { 0, 3.1, 4 } },
+	Red = { { -14, 3.1, -68 }, { -7, 3.1, -70 }, { 0, 3.1, -68 } },
 }
 
 function Rules.spawn(team: string, index: number): CFrame

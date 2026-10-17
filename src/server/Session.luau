@@ -7,6 +7,7 @@ local Rules = require(ReplicatedStorage.Shared.SessionRules)
 local PoliceSkin = require(script.Parent.PoliceSkin)
 local Loadout = require(script.Parent.Loadout)
 local CharacterCollision = require(script.Parent.CharacterCollision)
+local Movement = require(script.Parent.Movement)
 local Session = {}
 
 function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
@@ -74,14 +75,23 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	end
 	local function lock(player: Player)
 		local blocked = state:GetAttribute("Phase") ~= "Combat" or player:GetAttribute("TeamMenuOpen") == true
-		player:SetAttribute("SessionBlocked", state:GetAttribute("Phase") ~= "Combat")
 		local model = player.Character
 		local root = if model then model:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
 		if root and alive(model) then
+			local wasAnchored = root.Anchored
 			root.Anchored = blocked
-			root.AssemblyLinearVelocity = Vector3.zero
-			root.AssemblyAngularVelocity = Vector3.zero
+			if blocked or wasAnchored then
+				root.AssemblyLinearVelocity = Vector3.zero
+				root.AssemblyAngularVelocity = Vector3.zero
+			end
+			if not blocked then
+				-- Anchoring discards manual network ownership. Restore it immediately,
+				-- before controls unlock, instead of waiting for automatic migration.
+				root:SetNetworkOwner(player)
+				Movement.resume(player)
+			end
 		end
+		player:SetAttribute("SessionBlocked", state:GetAttribute("Phase") ~= "Combat")
 	end
 	local function phase(value: string, duration: number?)
 		state:SetAttribute("Phase", value)

@@ -1,4 +1,6 @@
 local vector = {}
+local clock=0
+local os={clock=function() return clock end}
 vector.__index = function(v, key)
 	if key == "Magnitude" then return math.sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z) end
 	if key == "Unit" then return v / v.Magnitude end
@@ -25,21 +27,27 @@ local game = {GetService=function(_, name)
 	return ({RunService=run,ReplicatedStorage=replicated,PathfindingService={}})[name]
 end}
 local script = {Parent={Combat="combat"}}
-local require = function() return {} end
+local require = function(name)
+	if name=="weapons" then return {{Range=500,Magazine=30,ReloadTime=2}} end
+	return {}
+end
 local bots = (function()
 -- BOTS_MODULE_HERE
 end)()
 local function actor(x,z)
 	local humanoid = {Health=100,MoveTo=function(self,position) self.destination=position end}
 	local root = {Position=V(x,3.1,z),SetNetworkOwner=function() end}
-	return {Parent=true,FindFirstChildOfClass=function() return humanoid end,
-		FindFirstChild=function(_,name) return root end}, humanoid, root
+	local tool={ammo=30,GetAttribute=function(self) return self.ammo end,SetAttribute=function(self,_,v) self.ammo=v end}
+	return {Parent=true,FindFirstChildOfClass=function(_,class) return if class=="Tool" then tool else humanoid end,
+		FindFirstChild=function(_,name) return root end}, humanoid, root, tool
 end
-local bot,h,root = actor(0,0)
+local bot,h,root,tool = actor(0,0)
 local human,_,humanRoot = actor(3,0)
-local enemy = actor(100,0)
-bots.start({Blue={{model=bot},{player=true,model=human}},Red={{player=true,model=enemy}}},
-	{GetAttribute=function() return "Combat" end}, {})
+local enemy,enemyHumanoid = actor(100,0)
+local shots=0
+local roster={Blue={{model=bot},{player=true,model=human}},Red={{player=true,model=enemy}}}
+bots.start(roster, {GetAttribute=function() return "Combat" end},
+	{ShotEffect={FireAllClients=function() shots+=1 end}})
 heartbeat(.1)
 assert(h.destination.X < 0, "bot retreats instead of crowding a nearby human")
 obstacle=true
@@ -55,4 +63,23 @@ assert(h.destination.X == 100, "clear route still advances toward the enemy")
 humanRoot.Position=root.Position
 heartbeat(.1)
 assert(h.destination.X == 0, "overlap does not normalize a zero vector")
+local function tick(dt) clock+=dt; heartbeat(dt) end
+tick(.8)
+assert(shots==0, "new target requires reaction time")
+tick(.11)
+assert(shots==1 and tool.ammo==29)
+tick(.23); tick(.23)
+assert(shots==3, "short three-shot burst")
+tick(.5)
+assert(shots==3, "pause after the burst")
+tick(.31)
+assert(shots==4)
+local replacement=actor(90,0)
+roster.Red[1].model=replacement
+tick(.3)
+assert(shots==4, "switching targets restarts reaction time")
+tick(.8)
+assert(shots==4)
+tick(.11)
+assert(shots==5)
 print("Bot spacing: retreat, wall clearance, yielding and normal movement OK")

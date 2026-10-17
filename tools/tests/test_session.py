@@ -35,7 +35,7 @@ class SessionTests(unittest.TestCase):
                 with self.subTest(x=x, z=z):
                     self.assertTrue(2 <= z <= 8 if team == 'Blue' else -72 <= z <= -66)
                     for other in positions[index + 1:]:
-                        self.assertGreaterEqual(math.dist((x, y, z), other), 16)
+                        self.assertGreaterEqual(math.dist((x, y, z), other), 7)
                     self.assertFalse([b[0] for b in spawn.PlayerSpawnTests.boxes
                                       if spawn.intersects((x, y - .5, z), (2, 2.48, 2), b)])
                     for dx in (-1, 0, 1):
@@ -46,6 +46,25 @@ class SessionTests(unittest.TestCase):
                             ceiling = min(lo for lo, hi in intervals if lo > y + 2)
                             self.assertGreaterEqual(ceiling, 9)
                             self.assertLessEqual(ceiling, 10.1)
+
+    def test_spawns_have_wall_cover_from_arena(self):
+        spawn.PlayerSpawnTests.setUpClass()
+        boxes = spawn.PlayerSpawnTests.boxes
+        walls = [b for b in boxes if spawn.intersects((0, 3, -32), (100, 2, 100), b)]
+        # Include both doorways and diagonal shots from across the arena.
+        sources = [(x, 4.5, z) for z in range(-18, -47, -4) for x in range(-30, 25, 3)
+                   if not any(spawn.intersects((x, 2.6, z), (1, 2.48, 1), b) for b in boxes)]
+        rules = (ROOT / 'src/shared/SessionRules.luau').read_text()
+        for team in ('Blue', 'Red'):
+            row = re.search(rf'{team} = \{{([^\n]+)\}}', rules)[1]
+            for xyz in re.findall(r'\{([^}]+)\}', row):
+                x, y, z = map(float, xyz.split(','))
+                for source in sources:
+                    for dx, dz in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
+                        for height in (1.5, 4.5):
+                            target = (x + dx, height, z + dz)
+                            self.assertTrue(any(spawn.segment_intersects(source, target, b) for b in walls),
+                                            f'{team} spawn {xyz} exposed from {source} to {target}')
 
 
 if __name__ == '__main__':

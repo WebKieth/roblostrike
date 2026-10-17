@@ -72,6 +72,10 @@ function methods:PivotTo(frame)
 	for _, part in self:GetChildren() do if part:IsA("Part") then part.CFrame,part.Position=frame,frame.Position end end
 end
 function methods:EquipTool(tool) tool.Parent=self.Parent end
+function methods:SetNetworkOwner(owner)
+	assert(not self.Anchored, "ownership must be restored after unanchoring")
+	self.owner=owner
+end
 function methods:FireAllClients(...) self.last={...} end
 function methods:FireClient(recipient, ...) self.recipient=recipient; self.last={...} end
 local function character()
@@ -119,9 +123,10 @@ end
 local accessory=Instance.new("Part")
 probe.DescendantAdded:Fire(accessory)
 assert(accessory.CollisionGroup=="Characters", "late-added parts must not push characters")
-local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision"}}
+local movement = {resume=function(player) player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed=22 end}
+local script = {Parent={PoliceSkin="skin",Loadout="loadout",Bots="bots",CharacterCollision="collision",Movement="movement"}}
 local require = function(name)
-	return ({rules=rules,skin=skin,loadout=loadout,collision=collision,bots={start=function(slots) capturedSlots=slots end}})[name]
+	return ({rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
 local task = {
@@ -161,6 +166,7 @@ choose:Fire(admin,"Blue")
 assert(state:GetAttribute("Phase")=="Freeze" and spawnCount==1)
 assert(admin.Character:FindFirstChild("HumanoidRootPart").Anchored and admin:GetAttribute("SessionBlocked"))
 assert(admin.Character:FindFirstChild("PlayerNickname",true))
+admin.Character:FindFirstChildOfClass("Humanoid").WalkSpeed=0
 local blueBots,redBots=0,0
 for _, s in capturedSlots.Blue do if not s.player then blueBots+=1; assert(not s.model:FindFirstChild("PlayerNickname",true)) end end
 for _, s in capturedSlots.Red do if not s.player then redBots+=1 end end
@@ -170,6 +176,8 @@ assert(state:GetAttribute("Phase")=="Freeze")
 tick(.02)
 assert(state:GetAttribute("Phase")=="Combat" and not admin:GetAttribute("SessionBlocked"))
 assert(not admin.Character:FindFirstChild("HumanoidRootPart").Anchored)
+assert(admin.Character:FindFirstChild("HumanoidRootPart").owner==admin, "freeze release restores client physics ownership")
+assert(admin.Character:FindFirstChildOfClass("Humanoid").WalkSpeed==22, "freeze release restores speed immediately")
 for _, s in capturedSlots.Red do
 	s.model:FindFirstChildOfClass("Humanoid").Health=42
 	s.model:SetAttribute("Armor",60)
@@ -185,6 +193,7 @@ menu:Fire(friend,true)
 assert(before:FindFirstChild("HumanoidRootPart").Anchored and before:FindFirstChildOfClass("Humanoid").Health==42)
 menu:Fire(friend,false)
 assert(not before:FindFirstChild("HumanoidRootPart").Anchored)
+assert(before:FindFirstChild("HumanoidRootPart").owner==friend, "menu release also restores ownership")
 tick(.6); menu:Fire(friend,true); choose:Fire(friend,"Red")
 assert(beforeHumanoid.Health==0 and spawnCount==2, "same-team selection kills, never respawns")
 for _, s in capturedSlots.Red do if s.model then s.model:FindFirstChildOfClass("Humanoid").Health=0 end end

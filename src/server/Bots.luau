@@ -58,7 +58,7 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 				local head = model:FindFirstChild("Head") :: BasePart
 				local brain = brains[model]
 				if not brain then
-					brain = { nextShot = now + random:NextNumber(0.4, 1.2), nextPath = 0, waypoints = {}, waypoint = 1 }
+					brain = { nextShot = 0, nextPath = 0, waypoints = {}, waypoint = 1, burst = 0 }
 					brains[model] = brain
 					root:SetNetworkOwner(nil)
 				end
@@ -79,6 +79,12 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 						target, visible, distance = enemy.model, seen, delta.Magnitude
 					end
 				end
+				if not visible or target ~= brain.target then
+					-- React anew after cover or a target switch; no instant snap shots.
+					brain.nextShot = now + random:NextNumber(0.9, 1.6)
+					brain.burst = 0
+				end
+				brain.target = if visible then target else nil
 				if not target then continue end
 				local targetRoot = target:FindFirstChild("HumanoidRootPart") :: BasePart
 				if visible then
@@ -94,9 +100,17 @@ function Bots.start(slots: any, state: Folder, remotes: Folder)
 							if now >= brain.reloading then tool:SetAttribute("Ammo", Weapons[1].Magazine); brain.reloading = nil end
 							continue
 						end
-						brain.nextShot = now + Weapons[1].FireInterval + random:NextNumber(0.05, 0.18)
+						brain.burst += 1
+						if brain.burst >= 3 then
+							brain.nextShot = now + random:NextNumber(0.8, 1.4)
+							brain.burst = 0
+						else
+							brain.nextShot = now + random:NextNumber(0.22, 0.38)
+						end
 						tool:SetAttribute("Ammo", tool:GetAttribute("Ammo") - 1)
-						local aim = targetRoot.Position + Vector3.new(random:NextNumber(-2, 2), random:NextNumber(-0.5, 2), random:NextNumber(-2, 2))
+						local spread = 2.5 + distance * 0.07
+						local aim = targetRoot.Position + Vector3.new(random:NextNumber(-spread, spread),
+							random:NextNumber(-spread * 0.5, spread * 0.5), random:NextNumber(-spread, spread))
 						local direction = (aim - head.Position).Unit
 						local hit = workspace:Raycast(head.Position, direction * Weapons[1].Range, filter)
 						local victim = if hit then Combat.damage(hit, Weapons[1].DamageMultiplier, remotes.DamageNumber :: RemoteEvent, model) else nil

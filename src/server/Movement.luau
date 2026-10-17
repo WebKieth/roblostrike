@@ -56,6 +56,13 @@ function Movement.set(player: Player, walking: boolean, crouching: boolean)
 	end
 end
 
+function Movement.resume(player: Player)
+	local state = states[player]
+	if not state then return end
+	state.humanoid.WalkSpeed = if state.crouching then Config.CrouchSpeed
+		elseif state.walking then Config.WalkSpeed else Config.RunSpeed
+end
+
 local function canStand(state: State): boolean
 	-- R6 head top is root+2. Check only the extra space needed to stand,
 	-- not the floor/legs; stay crouched under a low ceiling until it is clear.
@@ -88,8 +95,7 @@ function Movement.step(_dt: number)
 			end
 			state.character:SetAttribute("Crouching", crouching)
 		end
-		humanoid.WalkSpeed = if crouching then Config.CrouchSpeed
-			elseif state.walking then Config.WalkSpeed else Config.RunSpeed
+		Movement.resume(player)
 	end
 end
 

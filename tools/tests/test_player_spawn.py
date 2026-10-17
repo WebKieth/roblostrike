@@ -51,6 +51,25 @@ def vertical_interval(x, z, box):
     return low, high
 
 
+def segment_intersects(start, end, box):
+    """Segment vs actual oriented collision bounds (slab intersection)."""
+    _, position, axes, half = box
+    delta = tuple(e - s for s, e in zip(start, end))
+    origin = tuple(s - p for s, p in zip(start, position))
+    low, high = 0, 1
+    for axis, radius in zip(axes, half):
+        offset, direction = dot(origin, axis), dot(delta, axis)
+        if abs(direction) < 1e-7:
+            if abs(offset) > radius:
+                return False
+        else:
+            a, b = sorted(((-radius - offset) / direction, (radius - offset) / direction))
+            low, high = max(low, a), min(high, b)
+            if low > high:
+                return False
+    return True
+
+
 class PlayerSpawnTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
