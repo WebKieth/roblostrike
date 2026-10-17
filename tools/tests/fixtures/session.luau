@@ -157,7 +157,9 @@ local function add(id)
 end
 local friend=add(100)
 local spawnCount=0
+local failNextSpawn=false
 session.start(remotes,function(player,frame)
+	if failNextSpawn then failNextSpawn=false; return nil end
 	spawnCount+=1
 	local model=character(); model.Name=player.Name; model:PivotTo(frame)
 	if player.Character then player.Character:Destroy() end
@@ -217,6 +219,71 @@ if scenario=="no_bots" then
 	players.PlayerRemoving:Fire(admin)
 	assert(not state:GetAttribute("Started") and state:GetAttribute("BotsPerTeam")==3)
 	print("Session: human-only setup, validation, no backfill, and waiting/resume OK")
+	return
+elseif scenario=="restart" then
+	local function bots(id)
+		local count=0
+		for _,s in capturedSlots[id] do if s.model and not s.player then count+=1 end end
+		return count
+	end
+	setup:Fire(admin,"Bots",1)
+	choose:Fire(admin,"Blue"); choose:Fire(friend,"Red")
+	setup:Fire(admin,"Start"); tick(3.1)
+	assert(bots("Blue")==1 and bots("Red")==1)
+	state:SetAttribute("BlueWins",3); state:SetAttribute("RedWins",2); state:SetAttribute("Winner","Blue")
+	local initialAdmin,initialFriend=admin.Character,friend.Character
+	setup:Fire(admin,"Restart")
+	assert(admin.Character==initialAdmin, "restart requires admin team menu")
+	menu:Fire(friend,true)
+	setup:Fire(friend,"Bots",0); setup:Fire(friend,"Restart")
+	assert(state:GetAttribute("PendingBotsPerTeam")==1 and admin.Character==initialAdmin, "non-admin cannot restart")
+	menu:Fire(admin,true); choose:Fire(admin,"Red")
+	assert(admin:GetAttribute("TeamMenuOpen"), "admin re-selection keeps setup controls open")
+	setup:Fire(admin,"Bots",0)
+	assert(state:GetAttribute("PendingBotsPerTeam")==0 and state:GetAttribute("BotsPerTeam")==1)
+	local before=spawnCount
+	setup:Fire(admin,"Restart")
+	assert(spawnCount==before and state:GetAttribute("BlueWins")==3 and state:GetAttribute("SetupError"),
+		"invalid human-only restart leaves running session and score untouched")
+	choose:Fire(friend,"Blue")
+	local oldBots={}
+	for _,roster in capturedSlots do for _,s in roster do if s.model and not s.player then table.insert(oldBots,s.model) end end end
+	setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Phase")=="Freeze" and state:GetAttribute("Round")==1)
+	assert(state:GetAttribute("BlueWins")==0 and state:GetAttribute("RedWins")==0 and not state:GetAttribute("Winner"))
+	assert(state:GetAttribute("BotsPerTeam")==0 and bots("Blue")==0 and bots("Red")==0)
+	assert(admin:GetAttribute("TeamId")=="Red" and friend:GetAttribute("TeamId")=="Blue", "preserve reselected teams")
+	assert(admin.Character~=initialAdmin and friend.Character~=initialFriend)
+	assert(admin.Character:FindFirstChildOfClass("Humanoid").Health==100)
+	for _,model in oldBots do assert(model.Destroyed, "old session bots removed") end
+	assert(not admin:GetAttribute("TeamMenuOpen") and admin:GetAttribute("SessionBlocked"))
+	menu:Fire(admin,true); setup:Fire(admin,"Bots",2)
+	local current=admin.Character
+	assert(state:GetAttribute("BotsPerTeam")==0 and bots("Red")==0 and admin.Character==current, "draft does not apply live")
+	menu:Fire(admin,false); setup:Fire(admin,"Restart")
+	assert(admin.Character==current, "closed menu cannot trigger restart")
+	menu:Fire(admin,true); setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("BotsPerTeam")==2 and bots("Blue")==2 and bots("Red")==2)
+	tick(.6); menu:Fire(admin,true); choose:Fire(admin,"Red")
+	assert(admin:GetAttribute("TeamMenuOpen"))
+	setup:Fire(admin,"Bots",1); setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Round")==1 and bots("Blue")==1 and bots("Red")==1)
+	tick(3.1)
+	for _,s in capturedSlots.Red do if s.model then s.model:FindFirstChildOfClass("Humanoid").Health=0 end end
+	tick(.1)
+	assert(state:GetAttribute("Phase")=="Intermission")
+	menu:Fire(admin,true); setup:Fire(admin,"Bots",0); setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Phase")=="Freeze" and state:GetAttribute("BlueWins")==0 and bots("Blue")==0)
+	-- A failed old-session spawn queues a retry; a later restart must invalidate it.
+	menu:Fire(admin,true); setup:Fire(admin,"Bots",1)
+	failNextSpawn=true
+	setup:Fire(admin,"Restart")
+	assert(state:GetAttribute("Phase")=="Lobby" and #delayed>0)
+	menu:Fire(admin,true); setup:Fire(admin,"Bots",0); setup:Fire(admin,"Restart")
+	current=admin.Character; before=spawnCount
+	for _,job in delayed do job.callback() end
+	assert(admin.Character==current and spawnCount==before and state:GetAttribute("Round")==1, "stale retry ignored after restart")
+	print("Session restart: host permission, draft budget, team re-selection, score reset, human-only mode and stale retry OK")
 	return
 elseif scenario=="one_bot" then
 	setup:Fire(admin,"Bots",1)

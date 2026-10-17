@@ -29,6 +29,9 @@ class SessionTests(unittest.TestCase):
     def test_configured_bot_budget_with_empty_slots(self):
         self.run_luau(self.session_fixture().replace('local scenario="default"', 'local scenario="one_bot"'))
 
+    def test_restart_with_new_bot_count_after_team_reselection(self):
+        self.run_luau(self.session_fixture().replace('local scenario="default"', 'local scenario="restart"'))
+
     def test_bots_yield_without_pushing_or_retreating_into_walls(self):
         fixture = (ROOT / 'tools/tests/fixtures/bot_spacing.luau').read_text()
         self.run_luau(fixture.replace('-- BOTS_MODULE_HERE', (ROOT / 'src/server/Bots.luau').read_text()))

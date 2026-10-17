@@ -49,6 +49,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	local generation, round = 0, 0
 	local active, starting, mutating = false, false, false
 	local launched, botsPerTeam = false, Rules.TeamSize
+	local pendingBots = botsPerTeam
 	local template: Model? = nil
 	local requests: { [Player]: number } = {}
 	for _, id in { "Red", "Blue" } do
@@ -63,6 +64,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	state:SetAttribute("Phase", "WaitingAdmin")
 	state:SetAttribute("Started", false)
 	state:SetAttribute("BotsPerTeam", botsPerTeam)
+	state:SetAttribute("PendingBotsPerTeam", pendingBots)
 
 	local function isAdmin(player: Player): boolean
 		local id = if Rules.AdminUserId ~= 0 then Rules.AdminUserId else game.CreatorId
@@ -191,19 +193,19 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		end
 		return false
 	end
-	local function ready(): boolean
+	local function ready(botLimit: number): boolean
 		if not hasHumans() then return false end
 		for _, roster in slots do
 			local humans = 0
 			for _, slot in roster do if slot.player then humans += 1 end end
-			if humans == 0 and botsPerTeam == 0 then return false end
+			if humans == 0 and botLimit == 0 then return false end
 		end
 		return true
 	end
-	local startRound: () -> ()
-	startRound = function()
-		if starting or not active or not launched then return end
-		if not ready() then
+	local startRound: (number) -> ()
+	startRound = function(expectedGeneration: number)
+		if expectedGeneration ~= generation or starting or not active or not launched then return end
+		if not ready(botsPerTeam) then
 			phase("Lobby")
 			clearModels()
 			return
@@ -225,7 +227,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			else
 				warn("[Session] Bot character creation failed: " .. tostring(result))
 				starting = false
-				if token == generation then phase("Lobby"); task.delay(3, startRound) end
+				if token == generation then phase("Lobby"); task.delay(3, function() startRound(token) end) end
 				return
 			end
 		end
@@ -242,13 +244,13 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 				if token ~= generation or slot.player ~= owner then
 					if model then model:Destroy() end
 					starting = false
-					if active and token == generation then phase("Lobby"); task.defer(startRound) end
+					if active and token == generation then phase("Lobby"); task.defer(startRound, token) end
 					return
 				end
 				if not model then
 					starting = false
 					phase("Lobby")
-					task.delay(3, startRound)
+					task.delay(3, function() startRound(token) end)
 					return
 				end
 				slot.model = model
@@ -263,8 +265,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 	local function stop()
 		active = false
 		launched, botsPerTeam = false, Rules.TeamSize
+		pendingBots = botsPerTeam
 		state:SetAttribute("Started", false)
 		state:SetAttribute("BotsPerTeam", botsPerTeam)
+		state:SetAttribute("PendingBotsPerTeam", pendingBots)
 		state:SetAttribute("SetupError", nil)
 		generation += 1
 		phase("WaitingAdmin")
@@ -333,26 +337,44 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		lock(player)
 	end)
 	setup.OnServerEvent:Connect(function(player, command, value)
-		if not active or launched or starting or mutating or not isAdmin(player) then return end
-		if state:GetAttribute("Phase") ~= "Lobby" then return end
+		if not active or starting or mutating or not isAdmin(player) then return end
+		if launched then
+			if not player:GetAttribute("TeamMenuOpen") then return end
+		elseif state:GetAttribute("Phase") ~= "Lobby" then return end
 		if command == "Bots" then
 			if typeof(value) ~= "number" or value % 1 ~= 0 or value < 0 or value > Rules.TeamSize then return end
-			botsPerTeam = value
-			state:SetAttribute("BotsPerTeam", value)
+			pendingBots = value
+			state:SetAttribute("PendingBotsPerTeam", value)
+			if not launched then
+				botsPerTeam = value
+				state:SetAttribute("BotsPerTeam", value)
+			end
 			state:SetAttribute("SetupError", nil)
-		elseif command == "Start" then
-			if not ready() then
+		elseif (command == "Start" and not launched) or (command == "Restart" and launched) then
+			if not ready(pendingBots) then
 				state:SetAttribute("SetupError", if not hasHumans() then "Сначала выберите команду."
 					else "Для игры без ботов нужны игроки в обеих командах.")
 				return
 			end
+			if launched then
+				-- Invalidate retries from the old session; preserve human team choices.
+				generation += 1
+				round = 0
+				state:SetAttribute("Round", 0)
+				state:SetAttribute("Winner", nil)
+				for id in slots do state:SetAttribute(id .. "Wins", 0) end
+				table.clear(lastPose)
+			end
+			botsPerTeam = pendingBots
+			state:SetAttribute("BotsPerTeam", botsPerTeam)
 			launched = true
 			state:SetAttribute("Started", true)
 			state:SetAttribute("SetupError", nil)
 			for _, other in Players:GetPlayers() do
+				other:SetAttribute("TeamMenuError", nil)
 				if other:GetAttribute("TeamId") then other:SetAttribute("TeamMenuOpen", false) end
 			end
-			task.spawn(startRound)
+			task.spawn(startRound, generation)
 		end
 	end)
 	choose.OnServerEvent:Connect(function(player, id)
@@ -398,7 +420,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		destination.player = player
 		player.Team = teams[id]
 		player:SetAttribute("TeamId", id)
-		player:SetAttribute("TeamMenuOpen", not launched)
+		player:SetAttribute("TeamMenuOpen", not launched or isAdmin(player))
 		lock(player)
 		local token = generation
 		if canEnter then
@@ -418,7 +440,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 			elseif model then model:Destroy() end
 		end
 		mutating = false
-		if active and launched and state:GetAttribute("Phase") == "Lobby" then task.spawn(startRound) end
+		if active and launched and state:GetAttribute("Phase") == "Lobby" then task.spawn(startRound, generation) end
 	end)
 	require(script.Parent.Bots).start(slots, state, remotes)
 	RunService.Heartbeat:Connect(function()
@@ -426,7 +448,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame) -> Model?)
 		local current = state:GetAttribute("Phase")
 		local expired = workspace:GetServerTimeNow() >= (state:GetAttribute("Deadline") or math.huge)
 		if current == "Freeze" and expired then phase("Combat") end
-		if current == "Intermission" and expired then task.spawn(startRound) end
+		if current == "Intermission" and expired then task.spawn(startRound, generation) end
 		if current ~= "Combat" then return end
 		local living = { Red = 0, Blue = 0 }
 		for id, roster in slots do

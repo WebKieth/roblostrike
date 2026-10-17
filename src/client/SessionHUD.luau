@@ -80,7 +80,7 @@ function SessionHUD.start(player: Player)
 	start.Font, start.TextSize = Enum.Font.GothamBold, 17
 	start.BackgroundColor3, start.TextColor3, start.Parent = Color3.fromRGB(49, 130, 93), Color3.new(1, 1, 1), setupPanel
 	Instance.new("UICorner", start).CornerRadius = UDim.new(0, 8)
-	start.Activated:Connect(function() setup:FireServer("Start") end)
+	start.Activated:Connect(function() setup:FireServer(if state:GetAttribute("Started") then "Restart" else "Start") end)
 	ContextActionService:BindActionAtPriority("RobostrikeTeamMenu", function(_, inputState)
 		if player:GetAttribute("SettingsOpen") then return Enum.ContextActionResult.Sink end
 		if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -161,17 +161,20 @@ function SessionHUD.start(player: Player)
 		local admin = player:GetAttribute("SessionAdmin") == true
 		local bots = state:GetAttribute("BotsPerTeam") or Rules.TeamSize
 		local open = (player:GetAttribute("TeamMenuOpen") == true or configuring) and not waiting
-		local height = if configuring then 460 else 310
+		local restarting = admin and open and not configuring and state:GetAttribute("Started") == true
+		local editable = (configuring or restarting) and current ~= "Preparing"
+		if restarting then bots = state:GetAttribute("PendingBotsPerTeam") or bots end
+		local height = if configuring or restarting then 460 else 310
 		panel.Size, constraint.MaxSize = UDim2.new(0.9, 0, 0, height), Vector2.new(640, height)
-		setupPanel.Visible = configuring
+		setupPanel.Visible = configuring or restarting
 		botCount.Text = if bots == 0 then "Без ботов · только игроки" else string.format("До %d ботов на команду · до %d участников на сторону", bots, Rules.TeamSize)
 		botCount.TextScaled = true
 		for count, b in botButtons do
-			b.Interactable = admin and configuring
+			b.Interactable = admin and editable
 			b.BackgroundColor3 = if count == bots then Color3.fromRGB(51, 130, 191) else Color3.fromRGB(37, 49, 65)
 		end
-		start.Interactable = admin and configuring
-		start.Text = if admin then "НАЧАТЬ СЕССИЮ" else "ОЖИДАНИЕ АДМИНИСТРАТОРА"
+		start.Interactable = admin and editable
+		start.Text = if restarting then "ПЕРЕЗАПУСТИТЬ СЕССИЮ" elseif admin then "НАЧАТЬ СЕССИЮ" else "ОЖИДАНИЕ АДМИНИСТРАТОРА"
 		overlay.Visible, hint.Visible = open or waiting, not waiting
 		UserInputService.MouseIconEnabled = open or waiting
 		if open or waiting then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
@@ -180,6 +183,7 @@ function SessionHUD.start(player: Player)
 		footnote.Text = player:GetAttribute("TeamMenuError") or state:GetAttribute("SetupError") or (if waiting then "Сессия начнётся, когда подключится владелец игры."
 			elseif configuring then (if bots == 0 then "Выберите команды. Для старта нужен хотя бы один игрок с каждой стороны."
 				else "Выберите команды. Боты займут свободные места. Количество ботов задаёт администратор перед стартом.")
+			elseif restarting then "Выбери команду и количество ботов. Перезапуск сбросит счёт и вернёт всех на спавн.\nБез перезапуска новые настройки не применяются. M — закрыть."
 			elseif player:GetAttribute("TeamId") then "Выбор любой команды = смерть и наблюдение до нового раунда.\nM — закрыть меню. Пока меню открыто, тебя могут убить."
 			else "Ты займёшь место бота. Если он погиб — вступишь в следующем раунде.")
 		for id, button in buttons do
