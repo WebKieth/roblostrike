@@ -119,12 +119,13 @@ function SessionHUD.start(player: Player)
 	end
 	workspace.DescendantAdded:Connect(mute)
 	for _, instance in workspace:GetDescendants() do mute(instance) end
-	(remotes:WaitForChild("SessionDeath") :: RemoteEvent).OnClientEvent:Connect(function(position: Vector3)
+	(remotes:WaitForChild("SessionDeath") :: RemoteEvent).OnClientEvent:Connect(function(position: Vector3, wilhelm: boolean)
 		local emitter = Instance.new("Part")
 		emitter.Anchored, emitter.CanCollide, emitter.CanTouch, emitter.CanQuery, emitter.Transparency = true, false, false, false, 1
 		emitter.Position, emitter.Parent = position, workspace
 		local sound = Instance.new("Sound")
-		sound.SoundId, sound.Volume, sound.RollOffMaxDistance = Rules.WilhelmSoundId, 0.64, 110
+		sound.SoundId = if wilhelm then Rules.WilhelmSoundId else Rules.DeathSoundId
+		sound.Volume, sound.RollOffMaxDistance = if wilhelm then 0.64 else 0.4, 80
 		Audio.assign(sound, "Characters")
 		sound.Parent = emitter
 		sound:Play()

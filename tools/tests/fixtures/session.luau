@@ -23,10 +23,13 @@ local Color3 = {fromRGB=function(...) return {...} end}
 local BrickColor = {new=function(v) return v end}
 local UDim2 = {fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end}
 local Enum = {HumanoidRigType={R6=1},HumanoidDisplayDistanceType={None=1},Font={GothamMedium=1},
-	RaycastFilterType={Exclude=1,Include=2},HumanoidStateType={Jumping=1}}
+	RaycastFilterType={Exclude=1,Include=2},HumanoidStateType={Jumping=1,GettingUp=2}}
 local RaycastParams,OverlapParams={new=function() return {} end},{new=function() return {} end}
 local instances = {}
 local methods = {}
+function methods:ClearAllChildren()
+	for _, child in self:GetChildren() do child:Destroy() end
+end
 local object = {
 	__index=function(self, key) return methods[key] or self.props[key] end,
 	__newindex=function(self, key, value)
@@ -78,6 +81,12 @@ end
 function methods:EquipTool(tool) tool.Parent=self.Parent end
 function methods:Move(direction) self.MoveDirection=direction end
 function methods:SetStateEnabled(state, enabled) self.jumpEnabled=enabled end
+function methods:ChangeState(state)
+	assert(self.Parent.Parent and not self.Parent.HumanoidRootPart.Anchored)
+	assert(self.Parent.HumanoidRootPart.AssemblyLinearVelocity.Magnitude==0)
+	assert(not self.PlatformStand and not self.Sit and self.UseJumpPower)
+	self.state=state
+end
 function methods:SetNetworkOwner(owner)
 	assert(not self.Anchored, "ownership must be restored after unanchoring")
 	self.owner=owner
@@ -145,7 +154,7 @@ function loadout.capture(player)
 	return {armor=model:GetAttribute("Armor"),helmet=model:GetAttribute("Helmet"),ammo=tool:GetAttribute("Ammo"),reserve=tool:GetAttribute("ReserveAmmo")}
 end
 local lootResets = 0
-local loot = {reset=function() lootResets += 1 end}
+local loot = {reset=function() lootResets += 1 end,dropBot=function() end}
 local skin = {description=function() return Instance.new("HumanoidDescription") end,apply=function() end}
 local collision = (function()
 -- COLLISION_MODULE_HERE
@@ -172,8 +181,9 @@ local directory = {start=function(_, _, created, joined)
 	createSession, joinSession = created, joined
 	return {added=function() end, close=function() end}
 end}
-local script = {Parent={PoliceSkin="skin",Loadout="loadout",Loot="loot",Bots="bots",Minimap="minimap",CharacterCollision="collision",Movement="movement",ServerDirectory="directory"}}
+local script = {Parent={PoliceSkin="skin",Loadout="loadout",Loot="loot",Bots="bots",Minimap="minimap",CharacterCollision="collision",Movement="movement",ServerDirectory="directory",BotCorpse="corpse"}}
 local require = function(name)
+	if name=="corpse" then return {prepare=function(model) model:FindFirstChildOfClass("Humanoid").BreakJointsOnDeath=false end} end
 	return ({minimap={start=function() end},maps=maps,loot=loot,directory=directory,config=config,rules=rules,skin=skin,loadout=loadout,collision=collision,movement=movement,bots={start=function(slots) capturedSlots=slots end}})[name]
 end
 local delayed={}
@@ -390,6 +400,25 @@ elseif scenario=="restart" then
 	for _,job in delayed do job.callback() end
 	assert(admin.Character==current and spawnCount==before and state:GetAttribute("Round")==1, "stale retry ignored after restart")
 	print("Session restart: host permission, draft budget, team re-selection, score reset, human-only mode and stale retry OK")
+	return
+elseif scenario=="death_audio" then
+	setup:Fire(admin,"Bots",1)
+	choose:Fire(admin,"Blue")
+	setup:Fire(admin,"Start")
+	for index=1,200 do
+		local model
+		for _,slot in capturedSlots.Red do if slot.model then model=slot.model end end
+		local h=model:FindFirstChildOfClass("Humanoid")
+		assert(h.BreakJointsOnDeath==false)
+		h.Health=0
+		local event=remotes:FindFirstChild("SessionDeath").last
+		assert(event and event[2]==(index%100==0), "one synchronized Wilhelm per hundred deaths")
+		assert(model.Parent and not model.Destroyed, "body remains after death")
+		menu:Fire(admin,true)
+		setup:Fire(admin,"Restart")
+		assert(model.Destroyed, "old bodies cleared on restart")
+	end
+	print("Session: intact bot setup, corpse retention and synchronized hundred-death cadence OK")
 	return
 elseif scenario=="one_bot" then
 	setup:Fire(admin,"Bots",1)

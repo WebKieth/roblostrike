@@ -66,6 +66,7 @@ function Loadout.create(slot: number): Tool
 	tool.Enabled = false
 	tool.Grip = definition.Grip
 	tool:SetAttribute("WeaponSlot", slot)
+	if definition.BoltCycle then tool:SetAttribute("BoltCycle", definition.BoltCycle) end
 	tool:SetAttribute("CatalogAssetId", definition.AssetId)
 	if definition.Grenade then
 		tool:SetAttribute("Ammo", definition.Count)
@@ -164,7 +165,6 @@ function Loadout.equip(player: Player, slot: number)
 	end
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	if not backpack then return end
-	player:SetAttribute("SelectedSlot", slot)
 	-- Both grenade definitions share hotbar key 4; WeaponSlot identifies the
 	-- concrete Tool internally. Repeated key 4 cycles without adding a fifth key.
 	local targetSlot = slot
@@ -176,7 +176,15 @@ function Loadout.equip(player: Player, slot: number)
 		local current = character:FindFirstChildOfClass("Tool")
 		local currentSlot = if current then current:GetAttribute("WeaponSlot") else nil
 		targetSlot = if currentSlot == 4 then 5 else 4
+		local candidate = Loadout.find(player, targetSlot)
+		if not candidate or (candidate:GetAttribute("Ammo") or 0) <= 0 then
+			targetSlot = if targetSlot == 4 then 5 else 4
+			candidate = Loadout.find(player, targetSlot)
+		end
+		-- An empty grenade selection must not change the current weapon or HUD.
+		if not candidate or (candidate:GetAttribute("Ammo") or 0) <= 0 then return end
 	end
+	player:SetAttribute("SelectedSlot", slot)
 	for _, container in { character, backpack } do
 		for _, tool in container:GetChildren() do
 			if tool:IsA("Tool") and tool:GetAttribute("WeaponSlot") == targetSlot then

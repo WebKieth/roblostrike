@@ -11,6 +11,11 @@ local Loadout = require(script.Parent.Loadout)
 local Loot = {}
 local resetRound: (() -> ())? = nil
 local activeMap: Instance? = nil
+local dropBotInventory: ((Model) -> ())? = nil
+
+function Loot.dropBot(model: Model)
+	if dropBotInventory then dropBotInventory(model) end
+end
 
 function Loot.setMap(map: Instance)
 	activeMap = map
@@ -98,6 +103,27 @@ function Loot.start(remotes: Folder, map: Instance?)
 		return item
 	end
 
+	dropBotInventory = function(model: Model)
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not model:GetAttribute("Bot") or not humanoid or humanoid.Health > 0 or not root then return end
+		local index = 0
+		for _, tool in model:GetChildren() do
+			if not tool:IsA("Tool") then continue end
+			local slot = tool:GetAttribute("WeaponSlot")
+			local definition = if typeof(slot) == "number" then Weapons[slot] else nil
+			if not definition then continue end
+			local primary = (definition.HotbarSlot or slot) == 1
+			if not primary and not (definition.Grenade and (tool:GetAttribute("Ammo") or 0) > 0) then continue end
+			tool:SetAttribute("Reloading", false)
+			tool:SetAttribute("Primed", false)
+			local item = add(root.Position, tool, nil, nil)
+			local angle = index * 2.4
+			item.velocity = Vector3.new(math.cos(angle) * 4, 3, math.sin(angle) * 4)
+			index += 1
+		end
+	end
+
 	resetRound = function()
 		-- Clear hidden cooldown visuals as well as dropped items and stored Tools.
 		for _, item in items do item.visual:Destroy() end
@@ -120,7 +146,7 @@ function Loot.start(remotes: Folder, map: Instance?)
 				local position = Vector3.new(x, 0.6, z)
 				add(position, if index <= 2 then Loadout.create(index) else nil, index == 4, position)
 			end
-			for index, x in { -25, -18 } do
+			for index, x in { -25, -18, -10 } do
 				local position = Vector3.new(x, 0.6, z + (if z == -10 then 4 else -4))
 				add(position, Loadout.create(index + 5), nil, position)
 			end
@@ -153,6 +179,8 @@ function Loot.start(remotes: Folder, map: Instance?)
 	Players.PlayerRemoving:Connect(function(player) lastDrop[player] = nil end)
 	RunService.Heartbeat:Connect(function(dt)
 		local exclusions: { Instance } = { folder }
+		local actors = workspace:FindFirstChild("SessionActors")
+		if actors then table.insert(exclusions, actors) end
 		for _, player in Players:GetPlayers() do
 			if player.Character then table.insert(exclusions, player.Character) end
 		end
@@ -216,17 +244,29 @@ function Loot.start(remotes: Folder, map: Instance?)
 				if item.tool then
 					local slot = item.tool:GetAttribute("WeaponSlot")
 					local definition = Weapons[slot]
-					local hotbarSlot = definition.HotbarSlot or slot
+					local hotbarSlot = if definition.Grenade then 4 else definition.HotbarSlot or slot
 					local existing = Loadout.find(player, slot)
 					if existing then
-						local reserve = existing:GetAttribute("ReserveAmmo") or 0
-						local available = (item.tool:GetAttribute("Ammo") or 0) + (item.tool:GetAttribute("ReserveAmmo") or 0)
-						local transfer = math.min(definition.Magazine * Survival.SpareMagazines - reserve, available)
-						if transfer <= 0 then continue end
-						existing:SetAttribute("ReserveAmmo", reserve + transfer)
+						if definition.Grenade then
+							local ammo = existing:GetAttribute("Ammo") or 0
+							local available = item.tool:GetAttribute("Ammo") or 0
+							local transfer = math.min(definition.Count - ammo, available)
+							if transfer <= 0 then continue end
+							existing:SetAttribute("Ammo", ammo + transfer)
+							if transfer < available then
+								item.tool:SetAttribute("Ammo", available - transfer)
+								continue
+							end
+						else
+							local reserve = existing:GetAttribute("ReserveAmmo") or 0
+							local available = (item.tool:GetAttribute("Ammo") or 0) + (item.tool:GetAttribute("ReserveAmmo") or 0)
+							local transfer = math.min(definition.Magazine * Survival.SpareMagazines - reserve, available)
+							if transfer <= 0 then continue end
+							existing:SetAttribute("ReserveAmmo", reserve + transfer)
+						end
 						item.tool:Destroy()
 					else
-						if Loadout.findHotbar(player, hotbarSlot) then continue end
+						if not definition.Grenade and Loadout.findHotbar(player, hotbarSlot) then continue end
 						local backpack = player:FindFirstChildOfClass("Backpack")
 						if not backpack then continue end
 						character:SetAttribute("DroppedSlot" .. hotbarSlot, false)

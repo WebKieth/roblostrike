@@ -11,6 +11,7 @@ local Loadout = require(script.Parent.Loadout)
 local CharacterCollision = require(script.Parent.CharacterCollision)
 local Movement = require(script.Parent.Movement)
 local Loot = require(script.Parent.Loot)
+local BotCorpse = require(script.Parent.BotCorpse)
 local Session = {}
 
 function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Snapshot?) -> Model?, activateMap: ((string) -> ())?)
@@ -26,6 +27,7 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 	pose.Name, pose.Parent = "SpectatorPose", remotes
 	local lastPose: { [Player]: number } = {}
 	local views: { [Player]: { model: Model, frame: CFrame, time: number } } = {}
+	local deathCount = 0
 	pose.OnServerEvent:Connect(function(player, frame)
 		if typeof(frame) ~= "CFrame" then return end
 		local now = os.clock()
@@ -157,7 +159,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 			if tag then tag:Destroy() end
 			if model.Parent then
 				local head = model:FindFirstChild("Head") :: BasePart?
-				if head then death:FireAllClients(head.Position) end
+				if head then
+					deathCount += 1
+					death:FireAllClients(head.Position, deathCount % Rules.WilhelmEveryDeaths == 0)
+				end
 			end
 		end)
 	end
@@ -171,7 +176,11 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 		model:PivotTo(Rules.spawn(id, index) * root.CFrame:Inverse() * model:GetPivot())
 		local h = model:FindFirstChildOfClass("Humanoid") :: Humanoid
 		h.WalkSpeed, h.JumpPower, h.AutoRotate = 0, 0, false
+		h.PlatformStand, h.Sit = false, false
+		h.UseJumpPower = true
 		h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		BotCorpse.prepare(model)
+		h.Died:Once(function() Loot.dropBot(model) end)
 		if not h:FindFirstChildOfClass("Animator") then Instance.new("Animator", h) end
 		CharacterCollision.apply(model)
 		model:SetAttribute("Armor", 0)
@@ -179,7 +188,10 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 		decorate(model, id, index, true)
 		model.Parent = actors
 		root.Anchored = false
+		root.AssemblyLinearVelocity, root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
 		root:SetNetworkOwner(nil)
+		-- Clones must enter a live locomotion state after leaving the stored template.
+		h:ChangeState(Enum.HumanoidStateType.GettingUp)
 		local tool = Loadout.create(1)
 		tool.Parent = model
 		h:EquipTool(tool)
@@ -191,6 +203,8 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 				if slot.model then slot.model:Destroy(); slot.model = nil end
 			end
 		end
+		-- Also clear dead bots whose roster slot was claimed by a joining player.
+		actors:ClearAllChildren()
 	end
 	local function hasHumans(): boolean
 		for _, roster in slots do
@@ -470,7 +484,11 @@ function Session.start(remotes: Folder, spawnPlayer: (Player, CFrame, Loadout.Sn
 				end
 			end
 		end
-		if destination.model then destination.model:Destroy(); destination.model = nil end
+		if destination.model then
+			local old = destination.model
+			if alive(old) or not old:GetAttribute("Bot") then old:Destroy() end
+			destination.model = nil
+		end
 		destination.player = player
 		player.Team = teams[id]
 		player:SetAttribute("TeamId", id)

@@ -9,12 +9,14 @@
 
 - Включены `src/client/`, `src/server/`, `src/shared/`, кроме перечисленных ниже
   закрытых модулей; тесты механик и их Luau-заглушки; `docs/weapon-view.md`,
-  этот документ, `.editorconfig` и `rokit.toml`.
-- Исключены `src/shared/GunModel.luau` (процедурная геометрия оружия),
-  `src/server/PoliceSkin.luau` и `src/shared/PoliceStyle.luau` (скины).
-- Не включены карты, модели, текстуры, аудио, `assets/`, `outputs/`, `build/`,
+  этот документ, `.editorconfig` и `rokit.toml`. Включены также документация AWP
+  и физики ботов, проверки оптики и процедурного оружия.
+- По разрешению владельца включён весь `src/shared/GunModel.luau`:
+  процедурная геометрия M4A1, Glock, AK-47, M249 и AWP.
+- Исключены `src/server/PoliceSkin.luau` и `src/shared/PoliceStyle.luau` (скины).
+- Не включены карты, внешние модели, текстуры, аудио, `assets/`, `outputs/`, `build/`,
   генераторы и импортёры карт, конфигурация полной сцены и CI публикации.
-- Проверки закрытой геометрии, карт, скинов и публикации остаются в GitLab.
+- Проверки карт, скинов и публикации остаются в GitLab.
   Имена карт в `MapCatalog.luau` — конфигурация селекта, не сами карты.
 
 Это пакет исходников, **не самостоятельная сборка игры**. Для запуска в Roblox
@@ -22,21 +24,18 @@
 `ServerStorage.Maps` и конфигурация Rojo. Ссылки на каталожные Roblox-ассеты в
 параметрах не передают права на них; доступность и права проверяются отдельно.
 `WeaponParts.luau` ожидает именованные подвижные части и атрибут `AnimationRest`;
-контракт описан в `docs/weapon-view.md`, геометрия в экспорт не входит.
+контракт описан в `docs/weapon-view.md`, геометрия оружия включена в экспорт.
 
 ## Проверка без закрытого контента
 
 Python 3.10+; Luau — `.tools/luau/luau` или `luau` из PATH. Из корня:
 
 ```sh
-PYTHONPATH=tools/tests python3 -m unittest -v \
-  test_bots test_client_presentation test_grenades test_knife \
-  test_player_settings test_server_browser test_session_music test_weapon_animation
+python3 -m unittest discover -s tools/tests -v
 ```
 
 `test_combat.py` также служит общим запускателем Luau для этих тестов.
-Полный `unittest discover` не является проверкой открытого пакета: оставшиеся
-интеграционные проверки могут требовать исключённую геометрию оружия.
+Интеграционные проверки геометрии карт в экспорт не входят.
 Play и Server & Clients в Studio нужны отдельно; автотесты не проверяют
 визуальное качество и реальное сетевое поведение.
 

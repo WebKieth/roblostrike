@@ -97,8 +97,9 @@ function Settings.start(player: Player)
 		{ "Предыдущее / следующее", "Колёсико мыши" },
 		{ "Огонь / режущий удар", "ЛКМ" },
 		{ "Прицел / колющий удар", "ПКМ" },
+		{ "Кратность AWP: ×8 / ×4 / ×1,5", "Нажатие колёсика" },
 		{ "Перезарядка", "R" },
-		{ "Бросить автомат / пистолет", "G" },
+		{ "Бросить основное / пистолет", "G" },
 		{ "Замах гранатой", "Удерживать ЛКМ" },
 		{ "Бросить гранату", "Отпустить ЛКМ" },
 		{ "Сменить режим броска", "ПКМ" },
@@ -133,13 +134,19 @@ function Settings.start(player: Player)
 	end
 	local sensitivity = 1
 	local cursorFree = false
+	local function applySensitivity()
+		local scale = player:GetAttribute("AimSensitivityScale")
+		UserInputService.MouseDeltaSensitivity = if cursorFree then 0 else sensitivity
+			* (if typeof(scale) == "number" then math.clamp(scale, 0, 1) else 1)
+	end
+	player:GetAttributeChangedSignal("AimSensitivityScale"):Connect(applySensitivity)
 	local altKeys: { [Enum.KeyCode]: boolean } = {}
 	local function setCursorFree(value: boolean)
 		cursorFree = value
 		-- A visible modal button releases Roblox's first-person mouse lock.
 		shortcut.Modal = value
 		-- Only mouse-look deltas are suppressed; the OS cursor still moves normally.
-		UserInputService.MouseDeltaSensitivity = if value then 0 else sensitivity
+		applySensitivity()
 		player:SetAttribute("HUDCursorFree", value)
 	end
 	UserInputService.InputBegan:Connect(function(input)
@@ -179,7 +186,7 @@ function Settings.start(player: Player)
 			value = math.clamp(value, minimum, maximum)
 			if channel == "Sensitivity" then
 				sensitivity = value
-				UserInputService.MouseDeltaSensitivity = if cursorFree then 0 else value
+				applySensitivity()
 			else
 				Audio.set(channel, value)
 			end

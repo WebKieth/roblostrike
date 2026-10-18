@@ -47,7 +47,8 @@ class ClientPresentationTests(unittest.TestCase):
 
     def test_death_volume_and_menu_guards(self):
         session = (ROOT / 'src/client/SessionHUD.luau').read_text()
-        self.assertIn('Rules.WilhelmSoundId, 0.64, 110', session)
+        self.assertIn('if wilhelm then Rules.WilhelmSoundId else Rules.DeathSoundId', session)
+        self.assertIn('if wilhelm then 0.64 else 0.4, 80', session)
         self.assertIn('Audio.assign(sound, "Characters")', session)
         for name in ('Combat', 'Knife', 'Grenades'):
             source = (ROOT / f'src/client/{name}.luau').read_text()

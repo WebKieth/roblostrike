@@ -99,7 +99,7 @@ function CharacterAnimation.start(character: Model)
 				end
 				weaponFrame *= CFrame.new(offset.Position * scale) * offset.Rotation
 				if animateParts then animateParts(pose, slot, scale) end
-				local trigger = definition.RightHand or Vector3.new(0, -0.4, 0.3)
+				local trigger = pose.RightHand or definition.RightHand or Vector3.new(0, -0.4, 0.3)
 				frame = armFrame(right, weaponFrame:PointToWorldSpace(trigger * scale))
 				right.Transform = right.C0:Inverse() * frame * right.C1
 				grip.C0 = frame:Inverse() * weaponFrame * grip.C1

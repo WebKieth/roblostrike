@@ -13,6 +13,30 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class CombatTests(unittest.TestCase):
+    def test_ads_mouse_sensitivity_tracks_optical_zoom_not_saved_preference(self):
+        source = (ROOT / 'src/shared/Ballistics.luau').read_text()
+        self.run_luau('local B=(function()\n' + source + r'''
+end)()
+local function near(a,b) assert(math.abs(a-b)<1e-9,tostring(a).." != "..tostring(b)) end
+for _,base in {60,70,90} do
+    near(B.aimSensitivity(base,base),1)
+    for _,zoom in {8,4,1.5} do
+        local target=math.deg(2*math.atan(math.tan(math.rad(base/2))/zoom))
+        near(B.aimSensitivity(base,target),1/zoom)
+        for _,fps in {30,60,144,240} do
+            local previous=1
+            for n=0,fps do
+                local fov=base+(target-base)*n/fps
+                local scale=B.aimSensitivity(base,fov)
+                assert(scale<=previous+1e-9 and scale>=1/zoom-1e-9)
+                previous=scale
+            end
+        end
+    end
+end
+assert(B.aimSensitivity(70,55)<1, "iron sights are also corrected")
+''')
+
     def run_luau(self, script):
         local = ROOT / '.tools/luau/luau'
         runner = str(local) if local.exists() else shutil.which('luau')

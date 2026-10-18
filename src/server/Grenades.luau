@@ -7,6 +7,7 @@ local Weapons = require(ReplicatedStorage.Shared.Weapons)
 local Rules = require(ReplicatedStorage.Shared.Grenades)
 local SessionRules = require(ReplicatedStorage.Shared.SessionRules)
 local Combat = require(script.Parent.Combat)
+local Loadout = require(script.Parent.Loadout)
 
 local Grenades = {}
 
@@ -73,8 +74,12 @@ function Grenades.start(remotes: Folder)
 		effects:FireAllClients(position)
 	end
 
-	local function consume(held: any)
+	local function consume(player: Player, held: any)
 		held.Tool:SetAttribute("Ammo", math.max(0, (held.Tool:GetAttribute("Ammo") or 0) - 1))
+		if held.Tool:GetAttribute("Ammo") == 0 then
+			Loadout.equip(player, 4)
+			if held.Tool.Parent == held.Character then Loadout.equip(player, 3) end
+		end
 	end
 
 	local function handContact(held: any, position: Vector3): RaycastResult?
@@ -135,7 +140,7 @@ function Grenades.start(remotes: Folder)
 			if command == "Throw" then
 				local origin = Rules.hand(CFrame.lookAt(head.Position, head.Position + direction), hip)
 				local cover = handContact(held, origin)
-				consume(held)
+				consume(player, held)
 				cancel(player)
 				if definition.Grenade == "Impact" and (cover or handOverlaps(held, origin)) then
 					explode(if cover then cover.Position + cover.Normal * (Rules.Radius + 0.02) else origin, character)
@@ -170,7 +175,7 @@ function Grenades.start(remotes: Folder)
 			if held.Definition.Grenade == "Impact" then
 				local contact = handContact(held, position)
 				if contact or handOverlaps(held, position) then
-					consume(held)
+					consume(player, held)
 					cancel(player)
 					explode(if contact then contact.Position + contact.Normal * (Rules.Radius + 0.02) else position, held.Character)
 					continue

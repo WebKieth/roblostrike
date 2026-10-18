@@ -129,7 +129,7 @@ function Viewmodel.start(player: Player, combat: any)
 		local base = camera.CFrame * CFrame.new(0, bob, 0)
 		local weaponFrame = base * definition.View
 		local now = workspace:GetServerTimeNow()
-		local pose = WeaponAnimation.fromTool(tool, now, now - (combat.ShotTime or -math.huge))
+		local pose = WeaponAnimation.fromTool(tool, now, if tool == combat.ShotTool then now - combat.ShotTime else nil)
 		if definition.Knife then
 			local knifePose = combat.KnifePose or CFrame.identity
 			weaponFrame *= CFrame.new(knifePose.Position * SCALE) * knifePose.Rotation
@@ -157,11 +157,16 @@ function Viewmodel.start(player: Player, combat: any)
 		if animateParts then animateParts(pose, slot, SCALE) end
 		if rightArm then
 			placeArm(rightArm, rightGlove, base:PointToWorldSpace(Vector3.new(1, -1.65, 0.15)),
-				weaponFrame:PointToWorldSpace(definition.RightHand * SCALE))
+				weaponFrame:PointToWorldSpace((pose.RightHand or definition.RightHand) * SCALE))
 		end
 		if leftArm and definition.LeftHand then
 			placeArm(leftArm, leftGlove, base:PointToWorldSpace(Vector3.new(-0.25, -1.65, 0.1)),
 				weaponFrame:PointToWorldSpace((pose.LeftHand or definition.LeftHand) * SCALE))
+		end
+		if model then
+			for _, child in model:GetDescendants() do
+				if child:IsA("BasePart") then child.LocalTransparencyModifier = if combat.Scoped then 1 else 0 end
+			end
 		end
 	end)
 end

@@ -203,4 +203,39 @@ attributes.TeamId = "Red"
 Combat.damage(hit, 1, events[4], character)
 assert(victim.Health == 25 and attributes.Armor == 80)
 assert(events[5].last[3] == true and events[5].count == incomingBefore + 1, "helmet headshot still kicks camera")
-print("Combat server: damage, ammo, rate, malformed input, cover and reload OK")
+-- AWP: server-owned bolt cooldown survives switching and gates reload as well.
+clock += 5
+definition.Magazine, definition.ReloadTime = 5, 3.6
+definition.FireInterval, definition.BoltCycle, definition.DamageMultiplier = 1.4, 1.4, 3
+ammo.Ammo, ammo.ReserveAmmo = 5, 15
+victim.Health, attributes.Armor, attributes.Helmet = 100, 100, true
+targetPart.Name = "Torso"
+fire(player, V(0,0,0), direction)
+assert(ammo.Ammo == 4 and victim.Health == -5, "AWP kills through vest")
+clock += .5
+fire(player, V(0,0,0), direction)
+reload(player)
+assert(ammo.Ammo == 4 and not ammo.Reloading, "bolt blocks both shot and reload")
+tool.Parent = {}
+if tool.AncestryChanged.callback then tool.AncestryChanged.callback() end
+tool.Parent = character
+clock += .5
+reload(player)
+assert(not ammo.Reloading, "switch cannot bypass bolt")
+clock += .5
+reload(player)
+assert(ammo.Reloading and not ammo.ReloadEmpty)
+delayed()
+assert(ammo.Ammo == 5 and ammo.ReserveAmmo == 14)
+clock += 4
+ammo.Ammo = 0
+reload(player)
+assert(ammo.ReloadEmpty)
+delayed()
+assert(ammo.Ammo == 5 and ammo.ReserveAmmo == 9)
+ammo.Ammo = 2
+reload(player)
+reload(player, true)
+delayed()
+assert(ammo.Ammo == 2 and ammo.ReserveAmmo == 9 and not ammo.Reloading, "menu/focus cancellation preserves ammo")
+print("Combat server: damage, ammo, rate, malformed input, cover, reload and AWP bolt OK")

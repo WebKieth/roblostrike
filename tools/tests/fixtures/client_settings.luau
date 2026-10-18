@@ -231,6 +231,22 @@ assert(audio.get("Gunfire")==.35, "saved settings received asynchronously apply 
 player:SetAttribute("SettingSensitivity",1.3)
 player:GetAttributeChangedSignal("SettingSensitivity"):Fire()
 assert(input.MouseDeltaSensitivity==1.3, "loaded sensitivity applies to mouse")
+local function aimScale(value)
+	player:SetAttribute("AimSensitivityScale",value)
+	player:GetAttributeChangedSignal("AimSensitivityScale"):Fire()
+end
+for _,zoom in {8,4,1.5} do
+	aimScale(1/zoom)
+	assert(math.abs(input.MouseDeltaSensitivity-1.3/zoom)<1e-9, "ADS multiplies saved sensitivity")
+	assert(player:GetAttribute("SettingSensitivity")==1.3, "ADS never overwrites saved setting")
+end
+input.InputBegan:Fire({KeyCode=Enum.KeyCode.LeftAlt})
+aimScale(1/8)
+assert(input.MouseDeltaSensitivity==0, "zoom cannot override free cursor")
+input.InputEnded:Fire({KeyCode=Enum.KeyCode.LeftAlt})
+assert(math.abs(input.MouseDeltaSensitivity-1.3/8)<1e-9)
+aimScale(1)
+assert(input.MouseDeltaSensitivity==1.3, "leaving ADS restores saved sensitivity")
 print("Client: sound mixing, slider input, Escape lifecycle, and first-person visibility OK")
 -- The real lobby UI must expose the server-checked bot budget and explicit start.
 local replicated=Instance.new("ReplicatedStorage")
@@ -341,7 +357,11 @@ renders.RobostrikeSessionHUD()
 assert(not setupPanel.Visible and not start.Interactable, "ordinary players do not get restart controls")
 assert(not selector.Interactable, "ordinary players cannot change the map")
 assert(actions.RobostrikeSessionFreeze==nil, "freeze must not swallow key releases")
-remotes:FindFirstChild("SessionDeath").OnClientEvent:Fire({})
+remotes:FindFirstChild("SessionDeath").OnClientEvent:Fire({}, false)
 local death=created[#created]
-assert(death:IsA("Sound") and death.Volume==.64 and death.SoundGroup==characters and death.played)
+assert(death:IsA("Sound") and death.Volume==.4 and death.SoundGroup==characters and death.played)
+assert(death.SoundId==rules.DeathSoundId)
+remotes:FindFirstChild("SessionDeath").OnClientEvent:Fire({}, true)
+death=created[#created]
+assert(death.Volume==.64 and death.SoundId==rules.WilhelmSoundId and death.played)
 print("Client lobby: bot count, host controls, explicit start, and reduced death audio OK")

@@ -15,6 +15,7 @@ local WeaponAnimation = require(ReplicatedStorage.Shared.WeaponAnimation)
 local Combat = {}
 
 function Combat.start(player: Player)
+	player:SetAttribute("AimSensitivityScale", 1)
 	local hitFeedback = require(script.Parent.HitFeedback).start(player)
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local fire = remotes:WaitForChild("FireShot") :: RemoteEvent
@@ -29,6 +30,8 @@ function Combat.start(player: Player)
 		Muzzle = nil :: Vector3?,
 		Active = false,
 		ShotTime = -math.huge,
+		ShotTool = nil :: Tool?,
+		Scoped = false,
 	}
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "CombatHUD"
@@ -36,6 +39,8 @@ function Combat.start(player: Player)
 	gui.ResetOnSpawn = false
 	gui.DisplayOrder = 12
 	gui.Parent = player:WaitForChild("PlayerGui")
+	local updateScope = require(script.Parent.SniperScope).start(gui)
+	local zoomIndex = 1
 	local crosshair = Instance.new("Frame")
 	crosshair.Name = "BallisticReticle"
 	crosshair.Size = UDim2.fromOffset(2, 2)
@@ -84,6 +89,8 @@ function Combat.start(player: Player)
 	local cameraRotation = CFrame.identity
 	local function release()
 		held, aiming, queued = false, false, false
+		player:SetAttribute("AimSensitivityScale", 1)
+		if currentTool and currentTool:GetAttribute("Reloading") then reload:FireServer(true) end
 	end
 	UserInputService.WindowFocusReleased:Connect(release)
 	UserInputService.TextBoxFocused:Connect(release)
@@ -111,12 +118,18 @@ function Combat.start(player: Player)
 			elseif inputState == Enum.UserInputState.End then held = false end
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 			aiming = pressed
+		elseif pressed and input.UserInputType == Enum.UserInputType.MouseButton3 then
+			local slot = if currentTool then currentTool:GetAttribute("WeaponSlot") else nil
+			local definition = if typeof(slot) == "number" then Weapons[slot] else nil
+			if definition and definition.ScopeMagnifications then
+				zoomIndex = zoomIndex % #definition.ScopeMagnifications + 1
+			end
 		elseif pressed and input.KeyCode == Enum.KeyCode.R then
 			reload:FireServer()
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.ContextActionPriority.High.Value + 1,
-		Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.KeyCode.R)
+		Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.UserInputType.MouseButton3, Enum.KeyCode.R)
 
 	effects.OnClientEvent:Connect(function(shooter: number, slot: number, muzzle: Vector3, target: Vector3,
 		normal: Vector3?, material: Enum.Material?, hit: Instance?, flesh: boolean, character: Model?)
@@ -163,16 +176,28 @@ function Combat.start(player: Player)
 		local definition = if typeof(slot) == "number" then Weapons[slot] else nil
 		if tool ~= currentTool then
 			currentTool = tool
+			zoomIndex = 1
+			aiming = false
 			-- Switching cannot erase recoil or bypass the shared firing cooldown.
 			queued = false
 			state.Muzzle = nil
+			state.ShotTool = nil
 		end
 		local active = humanoid ~= nil and humanoid.Health > 0 and definition ~= nil and definition.FireInterval ~= nil
-			and not player:GetAttribute("SessionBlocked") and not player:GetAttribute("TeamMenuOpen") and not player:GetAttribute("SettingsOpen")
+			and not player:GetAttribute("SessionBlocked") and not player:GetAttribute("TeamMenuOpen") and not player:GetAttribute("SettingsOpen") and not player:GetAttribute("HUDCursorFree")
 		state.Active = active
-		state.ADS += ((if active and aiming and tool and not tool:GetAttribute("Reloading") then 1 else 0) - state.ADS) * (1 - math.exp(-dt * 16))
-		camera.FieldOfView = defaultFov + (55 - defaultFov) * state.ADS
-		crosshair.Visible, status.Visible = active, active
+		local serverNow = workspace:GetServerTimeNow()
+		local shotTime = if tool == state.ShotTool then state.ShotTime elseif tool then tool:GetAttribute("LastShotTime") else nil
+		local cycling = definition ~= nil and definition.BoltCycle ~= nil and typeof(shotTime) == "number" and serverNow - shotTime < definition.BoltCycle
+		state.ADS += ((if active and aiming and tool and not tool:GetAttribute("Reloading") and not cycling then 1 else 0) - state.ADS) * (1 - math.exp(-dt * 16))
+		local magnification = if definition and definition.ScopeMagnifications then definition.ScopeMagnifications[zoomIndex] else 1
+		local aimFov = if definition and definition.ScopeMagnifications then math.deg(2 * math.atan(math.tan(math.rad(defaultFov / 2)) / magnification)) else 55
+		camera.FieldOfView = defaultFov + (aimFov - defaultFov) * state.ADS
+		player:SetAttribute("AimSensitivityScale", if active and aiming and not cycling and tool and not tool:GetAttribute("Reloading")
+			then Ballistics.aimSensitivity(defaultFov, camera.FieldOfView) else 1)
+		state.Scoped = active and definition.ScopeMagnifications ~= nil and state.ADS > 0.95 and aiming and not cycling and not tool:GetAttribute("Reloading")
+		updateScope(state.Scoped, magnification, camera.ViewportSize, camera.ViewportSize * 0.5)
+		crosshair.Visible, status.Visible = active and not definition.ScopeMagnifications, active
 		local flinchLift, aimDrop = hitFeedback()
 		if not active or not tool or not humanoid or not head then
 			state.Aim = camera.CFrame * CFrame.Angles(-aimDrop, 0, 0)
@@ -205,7 +230,7 @@ function Combat.start(player: Player)
 		local age = now - lastShot
 		local reloading = tool:GetAttribute("Reloading") == true
 		local ammo = tool:GetAttribute("Ammo") or 0
-		local shooting = Ballistics.trigger(definition.Automatic == true, held, queued) and not reloading and ammo > 0 and now >= nextShot
+		local shooting = Ballistics.trigger(definition.Automatic == true, held, queued) and not reloading and not cycling and ammo > 0 and now >= nextShot
 		if shooting then
 			-- Resolve randomness BEFORE pose, reticle and ray, including shot #1.
 			dispersion = Ballistics.dispersion(index + 1, age, random:NextNumber(), random:NextNumber())
@@ -242,7 +267,7 @@ function Combat.start(player: Player)
 		local position = aim:PointToWorldSpace(translation)
 		local rotation = CFrame.lookAt(position + aim.UpVector * definition.SightHeight * SCALE, sightTarget, aim.UpVector).Rotation
 		local weaponFrame = CFrame.new(position) * rotation * CFrame.new(0, 0, state.Kick * 0.21)
-		weaponFrame *= WeaponAnimation.fromTool(tool, workspace:GetServerTimeNow()).Weapon
+		weaponFrame *= WeaponAnimation.fromTool(tool, serverNow, if tool == state.ShotTool then serverNow - state.ShotTime else nil).Weapon
 		local muzzle = weaponFrame:PointToWorldSpace(definition.Muzzle * SCALE)
 		local reach = muzzle - head.Position
 		local cover = if reach.Magnitude > 0.001 then workspace:Raycast(head.Position, reach, filter) else nil
@@ -257,6 +282,7 @@ function Combat.start(player: Player)
 		local barrelHit = workspace:Raycast(muzzle, direction * definition.Range, filter)
 		local target = if barrelHit then barrelHit.Position else muzzle + direction * definition.Range
 		local point = camera:WorldToViewportPoint(target)
+		updateScope(state.Scoped, magnification, camera.ViewportSize, Vector2.new(point.X, point.Y))
 		crosshair.Position = UDim2.fromOffset(point.X, point.Y)
 		for n, line in lines do
 			-- Keep a tiny dot in ADS as a verifiable ballistic reference; the
@@ -268,6 +294,7 @@ function Combat.start(player: Player)
 		end
 		status.Text = string.format("%s   %d / %d\n%s", definition.ModelName, ammo, tool:GetAttribute("ReserveAmmo") or 0,
 			if reloading then "Перезарядка…"
+			elseif definition.ScopeMagnifications then "ПКМ — прицел  ·  Колёсико — кратность  ·  R — магазин"
 			elseif definition.Automatic then "ЛКМ — огонь  ·  ПКМ — прицел  ·  R — перезарядка"
 			else "ЛКМ — одиночный  ·  ПКМ — прицел  ·  R — перезарядка")
 		status.TextSize = 15
@@ -285,6 +312,7 @@ function Combat.start(player: Player)
 			impulse = Ballistics.kick(index, now - lastShot, 1)
 			lastShot = now
 			state.ShotTime = workspace:GetServerTimeNow()
+			state.ShotTool = tool
 		end
 	end)
 	return state

@@ -3,7 +3,7 @@
 -- Deterministic, camera-independent poses. Distances are authored GunModel studs.
 local Animation = {}
 export type Pose = {
-	Weapon: CFrame, LeftHand: Vector3?, Magazine: number, MagazineHidden: boolean,
+	Weapon: CFrame, LeftHand: Vector3?, RightHand: Vector3?, Magazine: number, MagazineHidden: boolean,
 	Cover: number, Belt: number, Bolt: number,
 }
 
@@ -12,11 +12,35 @@ local function ramp(t: number, a: number, b: number): number
 	return x * x * (3 - 2 * x)
 end
 
-function Animation.sample(slot: number, progress: number?, empty: boolean, shotAge: number): Pose
+function Animation.sample(slot: number, progress: number?, empty: boolean, shotAge: number, cycleDuration: number?): Pose
 	local pose: Pose = {
-		Weapon = CFrame.identity, LeftHand = nil, Magazine = 0, MagazineHidden = false,
+		Weapon = CFrame.identity, LeftHand = nil, RightHand = nil, Magazine = 0, MagazineHidden = false,
 		Cover = 0, Belt = 0, Bolt = 0,
 	}
+	if slot == 8 then
+		local t = progress
+		local duration = cycleDuration or 1
+		local cycling = t == nil and shotAge >= 0 and shotAge < duration
+		if cycling then t = shotAge / duration end
+		if t == nil or t < 0 or t >= 1 then return pose end
+		local lift = ramp(t, 0, 0.14) * (1 - ramp(t, 0.88, 1))
+		local charge = if cycling then lift elseif empty then ramp(t, 0.64, 0.73) * (1 - ramp(t, 0.88, 1)) else 0
+		local pull = if cycling then ramp(t, 0.32, 0.5) * (1 - ramp(t, 0.56, 0.72))
+			elseif empty then ramp(t, 0.74, 0.8) * (1 - ramp(t, 0.8, 0.86)) else 0
+		pose.Bolt = pull
+		pose.Weapon = CFrame.new(0, 0.05 * lift, -0.3 * lift)
+			* CFrame.Angles(if cycling then 0 else math.rad(45) * lift * (1 - charge), 0,
+				math.rad(45) * (if cycling then lift else 2 * charge - lift))
+		if not cycling then
+			pose.Magazine = ramp(t, 0.23, 0.34) * (1 - ramp(t, 0.47, 0.6))
+			pose.MagazineHidden = t > 0.35 and t < 0.46
+			local support = Vector3.new(-0.06, -0.13, -0.85)
+			pose.LeftHand = support:Lerp(Vector3.new(0, -0.65 - pose.Magazine * 0.95, -0.25),
+				ramp(t, 0.08, 0.19) * (1 - ramp(t, 0.6, 0.68)))
+		end
+		pose.RightHand = Vector3.new(0, -0.3, 0.42):Lerp(Vector3.new(0.43, 0.02, 0.34 + pull * 0.32), charge)
+		return pose
+	end
 	if slot == 2 and shotAge >= 0 and shotAge < 0.11 then
 		pose.Bolt = ramp(shotAge, 0, 0.025) * (1 - ramp(shotAge, 0.025, 0.11))
 	end
@@ -66,8 +90,10 @@ function Animation.fromTool(tool: Tool, now: number, shotAge: number?): Pose
 	local duration = tool:GetAttribute("ReloadDuration")
 	local progress = if tool:GetAttribute("Reloading") and typeof(started) == "number"
 		and typeof(duration) == "number" and duration > 0 then (now - started) / duration else nil
+	local shot = tool:GetAttribute("LastShotTime")
 	return Animation.sample(if typeof(slot) == "number" then slot else 0, progress,
-		tool:GetAttribute("ReloadEmpty") == true, shotAge or math.huge)
+		tool:GetAttribute("ReloadEmpty") == true, shotAge or (if typeof(shot) == "number" then now - shot else math.huge),
+		tool:GetAttribute("BoltCycle"))
 end
 
 return table.freeze(Animation)

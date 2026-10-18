@@ -5,11 +5,17 @@ import re
 import subprocess
 import tempfile
 import unittest
+import test_combat
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class BotTests(unittest.TestCase):
+    def test_ragdoll_and_settled_body_lifecycle(self):
+        fixture = (ROOT / 'tools/tests/fixtures/bot_corpse.luau').read_text()
+        source = (ROOT / 'src/server/BotCorpse.luau').read_text()
+        test_combat.CombatTests.run_luau(self, fixture.replace('-- CORPSE_MODULE_HERE', source))
+
     def test_accuracy_halfway_to_original_without_faster_reactions(self):
         rules = (ROOT / 'src/shared/SessionRules.luau').read_text()
         base = float(re.search(r'BotAimBase = ([\d.]+)', rules)[1])

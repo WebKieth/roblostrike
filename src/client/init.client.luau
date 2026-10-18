@@ -60,8 +60,22 @@ player:GetAttributeChangedSignal("SettingsOpen"):Connect(function()
 	if player:GetAttribute("SettingsOpen") then resetMovement() end
 end)
 
+local function hasGrenades(): boolean
+	for _, container in { player.Character, player:FindFirstChildOfClass("Backpack") } do
+		if not container then continue end
+		for _, tool in container:GetChildren() do
+			if tool:IsA("Tool") then
+				local id = tool:GetAttribute("WeaponSlot")
+				if (id == 4 or id == 5) and (tool:GetAttribute("Ammo") or 0) > 0 then return true end
+			end
+		end
+	end
+	return false
+end
+
 local function selectSlot(slot: number)
 	if SessionRules.blocked(player) then return end
+	if slot == 4 and not hasGrenades() then return end
 	local character = player.Character
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 	if not humanoid or humanoid.Health <= 0 or (slot == selectedSlot and slot ~= 4) then
@@ -127,7 +141,9 @@ UserInputService.InputChanged:Connect(function(input, processed)
 	end
 	if input.UserInputType == Enum.UserInputType.MouseWheel and input.Position.Z ~= 0 then
 		local direction = if input.Position.Z > 0 then -1 else 1
-		selectSlot((selectedSlot - 1 + direction) % #slotKeys + 1)
+		local slot = (selectedSlot - 1 + direction) % #slotKeys + 1
+		if slot == 4 and not hasGrenades() then slot = (slot - 1 + direction) % #slotKeys + 1 end
+		selectSlot(slot)
 	end
 end)
 UserInputService.WindowFocusReleased:Connect(resetMovement)

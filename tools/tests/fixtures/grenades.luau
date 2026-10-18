@@ -56,8 +56,9 @@ local definitions = {
 local session = (function()
 -- SESSION_RULES_HERE
 end)()
-local script = {Parent={Combat="combat"}}
+local script = {Parent={Combat="combat",Loadout="loadout"}}
 local require = function(name)
+	if name == "loadout" then return {equip=function() end} end
 	if name == "combat" then return {
 		feedback=function(event, _, position, damage) event:FireClient("attacker", position, damage) end,
 		incoming=function(_, _, headshot) assert(not headshot, "blast is not a headshot") end,

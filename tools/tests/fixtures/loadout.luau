@@ -52,7 +52,7 @@ local CFrame = {
 }
 local Vector3 = { new = function(x,y,z) return {X=x,Y=y,Z=z} end }
 local Color3 = { fromRGB = function(...) return {} end, new = function(...) return {} end }
-local Enum = {Material={SmoothPlastic=1, Metal=2}, PartType={Cylinder=1}, MeshType={FileMesh=1}}
+local Enum = {Material={SmoothPlastic=1, Metal=2, Glass=3}, PartType={Cylinder=1, Ball=2}, MeshType={FileMesh=1, Sphere=2}}
 local weapons = (function()
 -- WEAPONS_MODULE_HERE
 end)()
@@ -122,6 +122,23 @@ Loadout.equip(player, 4)
 equipped = character:FindFirstChildOfClass("Tool")
 assert(equipped:GetAttribute("WeaponSlot") == 4 and equipped:GetAttribute("Ammo") == 2,
 	"key 4 cycles grenade types without refilling inventory")
+Loadout.find(player,4):SetAttribute("Ammo",0)
+Loadout.equip(player,4)
+assert(character:FindFirstChildOfClass("Tool"):GetAttribute("WeaponSlot")==5, "skip spent timed grenades")
+Loadout.equip(player,4)
+assert(character:FindFirstChildOfClass("Tool"):GetAttribute("WeaponSlot")==5, "only remaining type stays selected")
+Loadout.find(player,5):SetAttribute("Ammo",0)
+Loadout.equip(player,2)
+Loadout.equip(player,4)
+assert(character:FindFirstChildOfClass("Tool"):GetAttribute("WeaponSlot")==2 and player:GetAttribute("SelectedSlot")==2,
+	"no grenades: preserve equipped weapon and selected HUD slot")
+Loadout.find(player,4):SetAttribute("Ammo",1)
+Loadout.equip(player,4)
+assert(character:FindFirstChildOfClass("Tool"):GetAttribute("WeaponSlot")==4, "skip spent impact grenades")
+Loadout.find(player,5):Destroy()
+Loadout.equip(player,4)
+assert(character:FindFirstChildOfClass("Tool"):GetAttribute("WeaponSlot")==4, "missing other type is skipped too")
+Loadout.create(5).Parent=replacement
 Loadout.equip(player, 1)
 equipped = character:FindFirstChildOfClass("Tool")
 -- Selecting a missing slot must never conjure a replacement gun.
@@ -141,7 +158,7 @@ assert(pistolParts.GlockSlide and pistolParts.PolymerFrame and pistolParts.Trigg
 assert(not pistolParts.Toggle and not pistolParts.WoodGripPanel, "no Luger geometry remains")
 local slideWeld = pistolParts.GlockSlide:FindFirstChildOfClass("Weld")
 assert(not pistolParts.GlockSlide.Anchored and slideWeld and slideWeld.Name == "AnimationWeld", "world pistol has an animatable weld")
-for slot, expected in {[6]={"AKReceiver",30,90}, [7]={"M249Receiver",100,300}} do
+for slot, expected in {[6]={"AKReceiver",30,90}, [7]={"M249Receiver",100,300}, [8]={"AWPReceiver",5,15}} do
 	local primary = Loadout.create(slot)
 	assert(primary:GetAttribute("Ammo")==expected[2] and primary:GetAttribute("ReserveAmmo")==expected[3])
 	local found=false

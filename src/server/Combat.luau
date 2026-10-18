@@ -104,6 +104,8 @@ function Combat.start(remotes: Folder)
 			return
 		end
 		local ammo = tool:GetAttribute("Ammo")
+		local shotTime = tool:GetAttribute("LastShotTime")
+		if definition.BoltCycle and typeof(shotTime) == "number" and workspace:GetServerTimeNow() - shotTime < definition.BoltCycle then return end
 		if typeof(ammo) ~= "number" or ammo <= 0 or tool:GetAttribute("Reloading") then
 			return
 		end
@@ -145,12 +147,23 @@ function Combat.start(remotes: Folder)
 			if hit then hit.Instance else nil, victim ~= nil, character)
 	end)
 
-	reload.OnServerEvent:Connect(function(player: Player)
+	reload.OnServerEvent:Connect(function(player: Player, cancel: any)
+		if cancel == true then
+			local character = player.Character
+			local tool = if character then character:FindFirstChildOfClass("Tool") else nil
+			if tool then
+				reloadTokens[tool] = (reloadTokens[tool] or 0) + 1
+				tool:SetAttribute("Reloading", false)
+			end
+			return
+		end
 		local character, tool, definition = equipped(player)
 		if not character or not tool or tool:GetAttribute("Reloading") or tool:GetAttribute("Ammo") == definition.Magazine
 			or (tool:GetAttribute("ReserveAmmo") or 0) <= 0 then
 			return
 		end
+		local shotTime = tool:GetAttribute("LastShotTime")
+		if definition.BoltCycle and typeof(shotTime) == "number" and workspace:GetServerTimeNow() - shotTime < definition.BoltCycle then return end
 		local token = (reloadTokens[tool] or 0) + 1
 		reloadTokens[tool] = token
 		tool:SetAttribute("ReloadEmpty", (tool:GetAttribute("Ammo") or 0) == 0)
@@ -171,7 +184,8 @@ function Combat.start(remotes: Folder)
 			if reloadTokens[tool] ~= token then return end
 			tool:SetAttribute("Reloading", false)
 			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			if player.Character == character and humanoid and humanoid.Health > 0 and tool.Parent == character then
+			if player.Character == character and humanoid and humanoid.Health > 0 and tool.Parent == character
+				and not Rules.blocked(player) and not player:GetAttribute("SettingsOpen") and not player:GetAttribute("HUDCursorFree") then
 				local reserve = tool:GetAttribute("ReserveAmmo") or 0
 				local transfer = math.min(definition.Magazine - (tool:GetAttribute("Ammo") or 0), reserve)
 				tool:SetAttribute("ReserveAmmo", reserve - transfer)

@@ -7,6 +7,13 @@ Ballistics.CameraFollowAngle = math.rad(6)
 -- 1 is the existing hardcore recoil pattern (future AK/heavy MG baseline).
 Ballistics.SpreadStrength = 1
 
+-- Preserve screen-space mouse speed through any ADS/zoom transition, not just
+-- the named scope stops. The user's base sensitivity remains unchanged.
+function Ballistics.aimSensitivity(baseFov: number, fieldOfView: number): number
+	return math.clamp(math.tan(math.rad(math.clamp(fieldOfView, 1, 120) / 2))
+		/ math.tan(math.rad(math.clamp(baseFov, 1, 120) / 2)), 0, 1)
+end
+
 function Ballistics.spreadScale(weaponMultiplier: number, ads: number, crouching: boolean?): number
 	return Ballistics.SpreadStrength * weaponMultiplier * (1 - math.clamp(ads, 0, 1) * 0.5)
 		* (if crouching then 0.8 else 1)

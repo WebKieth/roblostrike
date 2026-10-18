@@ -15,6 +15,8 @@ local Rules = {
 	FreezeSeconds = 1,
 	IntermissionSeconds = 4,
 	WilhelmSoundId = "rbxassetid://160718677",
+	WilhelmEveryDeaths = 100,
+	DeathSoundId = "rbxasset://sounds/uuhhh.mp3",
 	-- assets/audio/shiza.mp3; the experience must have permission to use this audio.
 	SessionMusicSoundId = "rbxassetid://82769481359031",
 	SessionMusicVolume = 0.35,
